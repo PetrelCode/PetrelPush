@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    name: Build & Test
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore PetrelPush.sln
+
+      - name: Build
+        run: dotnet build PetrelPush.sln -c Release --no-restore
+
+      - name: Test
+        run: dotnet test PetrelPush.Tests/PetrelPush.Tests.csproj -c Release --no-build --logger "trx;LogFileName=test-results.trx"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: PetrelPush.Tests/TestResults/test-results.trx
+          if-no-files-found: ignore
+
+  installer:
+    name: Build MSI
+    runs-on: windows-latest
+    needs: build-test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build MSI
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/build-msi.ps1 -Version 0.1.0
+
+      - name: Upload MSI
+        uses: actions/upload-artifact@v4
+        with:
+          name: PetrelPushSetup
+          path: artifacts/PetrelPushSetup-*.msi
+          if-no-files-found: error

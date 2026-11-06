@@ -1,5 +1,7 @@
 # PetrelPush
 
+[![CI](https://github.com/PetrelCode/PetrelPush/actions/workflows/ci.yml/badge.svg)](https://github.com/PetrelCode/PetrelPush/actions/workflows/ci.yml)
+
 > Windows → Linux 项目文件实时同步工具
 
 PetrelPush 是一款常驻系统托盘的 Windows 桌面工具：把本地项目目录**实时单向镜像**到 Linux 服务器（开发机 / 测试机 / 部署机）。远端只需要 sshd，不需要安装任何 agent；工具也**不读写你的 `.git`**，不会干扰 `git add / commit / gc / push`。
