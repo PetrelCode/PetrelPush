@@ -1,7 +1,7 @@
 # PetrelPush
 
 <p>
-  <a href="https://github.com/PetrelCode/PetrelPush/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/PetrelCode/PetrelPush/ci.yml?branch=main&amp;style=flat-square"></a>
+  <a href="https://github.com/PetrelCode/PetrelPush/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/PetrelCode/PetrelPush/ci.yml?branch=main&amp;label=CI&amp;style=flat-square"></a>
   <a href="https://github.com/PetrelCode/PetrelPush/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/PetrelCode/PetrelPush?sort=semver&amp;style=flat-square"></a>
   <a href="https://github.com/PetrelCode/PetrelPush/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/PetrelCode/PetrelPush/total?style=flat-square"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/PetrelCode/PetrelPush?style=flat-square"></a>
