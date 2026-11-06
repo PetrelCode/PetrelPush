@@ -1,0 +1,32 @@
+# 统一换行符：文本文件按内容自动判定，脚本/解决方案固定 CRLF，Shell 脚本固定 LF
+* text=auto
+
+*.sln      text eol=crlf
+*.csproj   text eol=crlf
+*.wixproj  text eol=crlf
+*.props    text eol=crlf
+*.ps1      text eol=crlf
+*.cmd      text eol=crlf
+*.bat      text eol=crlf
+*.sh       text eol=lf
+
+*.cs       text
+*.xaml     text
+*.xml      text
+*.json     text
+*.yml      text
+*.yaml     text
+*.md       text
+*.wxs      text
+
+# 二进制文件不做换行符转换
+*.png      binary
+*.ico      binary
+*.exe      binary
+*.dll      binary
+*.pdb      binary
+*.msi      binary
+*.cab      binary
+*.wixpdb   binary
+*.db       binary
+*.bin      binary

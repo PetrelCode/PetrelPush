@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <!--
+    PetrelPush 安装包：perMachine 安装到 Program Files\PetrelPush。
+    开机自启由应用自身写入 HKCU\...\Run（见 StartupRegistration），安装包不写。
+    卸载时由 purge-userdata.ps1 清除所有本地用户的 %APPDATA%\PetrelPush（配置、状态库、日志）
+    以及各用户的开机自启注册表项；MajorUpgrade 升级过程中的旧版本卸载不清理，保证配置延续。
+  -->
+  <Package Name="PetrelPush"
+           Manufacturer="PetrelPush"
+           Version="$(var.ProductVersion)"
+           UpgradeCode="{8F3C2A41-7B6D-4E52-9C18-5D0A2B7E4F61}"
+           Language="2052"
+           Codepage="936"
+           Scope="perMachine"
+           Compressed="yes">
+
+    <MajorUpgrade DowngradeErrorMessage="已安装更高版本的 PetrelPush，请先卸载后再安装。" />
+    <MediaTemplate EmbedCab="yes" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="PetrelPush" />
+    </StandardDirectory>
+
+    <!-- perMachine 安装时 ProgramMenuFolder 解析为“所有用户”开始菜单 -->
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="PetrelPush" />
+    </StandardDirectory>
+
+    <Component Id="ApplicationShortcuts"
+               Directory="ApplicationProgramsFolder"
+               Guid="{2B9A7D54-1C3E-4F86-A0B7-6E8D5C1F2A93}">
+      <Shortcut Id="StartMenuShortcut"
+                Name="PetrelPush"
+                Description="Windows → Linux 项目文件实时同步"
+                Target="[INSTALLFOLDER]PetrelPush.exe"
+                WorkingDirectory="INSTALLFOLDER" />
+      <RemoveFolder Id="RemoveApplicationProgramsFolder" On="uninstall" />
+      <RegistryValue Root="HKLM"
+                     Key="Software\PetrelPush"
+                     Name="InstallLocation"
+                     Type="string"
+                     Value="[INSTALLFOLDER]"
+                     KeyPath="yes" />
+    </Component>
+
+    <Feature Id="Main" Title="PetrelPush" Level="1" AllowAbsent="no">
+      <ComponentGroupRef Id="PublishedFiles" />
+      <ComponentRef Id="ApplicationShortcuts" />
+      <ComponentRef Id="CleanupScript" />
+    </Feature>
+
+    <!--
+      卸载清理：以 deferred + Impersonate="no"（SYSTEM）运行，才能访问并删除所有用户的 Profile；
+      排在 RemoveFiles 之前，保证清理脚本自身仍在安装目录中。
+      Return="ignore"：清理失败不影响卸载本身（例如 PowerShell 被执行策略/白名单拦截）。
+    -->
+    <CustomAction Id="PurgeUserData"
+                  Directory="INSTALLFOLDER"
+                  ExeCommand="&quot;[System64Folder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]purge-userdata.ps1&quot;"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore" />
+
+    <InstallExecuteSequence>
+      <Custom Action="PurgeUserData"
+              Before="RemoveFiles"
+              Condition="REMOVE=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+    </InstallExecuteSequence>
+
+    <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
+  </Package>
+
+  <Fragment>
+    <ComponentGroup Id="PublishedFiles" Directory="INSTALLFOLDER">
+      <Files Include="$(var.AppPublishDir)**" />
+    </ComponentGroup>
+  </Fragment>
+
+  <Fragment>
+    <DirectoryRef Id="INSTALLFOLDER">
+      <Component Id="CleanupScript" Guid="{7E4C1F92-3A6B-4D58-9C07-2B8E5A1D6F43}">
+        <File Id="PurgeUserDataScript" Source="purge-userdata.ps1" KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+  </Fragment>
+</Wix>

@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <RootNamespace>PetrelPush.App</RootNamespace>
+    <AssemblyName>PetrelPush</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- WPF 的 PerMonitorV2 依赖 manifest 中的 dpiAware/dpiAwareness（WinForms 分析器建议不适用于此混合项目） -->
+    <NoWarn>$(NoWarn);WFAC010</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 顶栏与「关于」页使用的品牌图标（WPF 资源，URI：/Assets/icon.png） -->
+    <Resource Include="Assets\icon.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Serilog" Version="4.1.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PetrelPush.Core\PetrelPush.Core.csproj" />
+    <ProjectReference Include="..\PetrelPush.State\PetrelPush.State.csproj" />
+    <ProjectReference Include="..\PetrelPush.Transport\PetrelPush.Transport.csproj" />
+  </ItemGroup>
+
+</Project>

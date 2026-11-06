@@ -1,0 +1,52 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PetrelPush.Core", "PetrelPush.Core\PetrelPush.Core.csproj", "{1EEEB108-52A0-4338-B40F-DE71101BA1CA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PetrelPush.State", "PetrelPush.State\PetrelPush.State.csproj", "{3C286CFC-99D8-4F92-8384-E90EEE8278C7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PetrelPush.Transport", "PetrelPush.Transport\PetrelPush.Transport.csproj", "{F8DC047E-46A5-413C-8726-04FBE5696558}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PetrelPush.Cli", "PetrelPush.Cli\PetrelPush.Cli.csproj", "{D61FF029-F219-4327-BC0E-89D86C474445}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PetrelPush.App", "PetrelPush.App\PetrelPush.App.csproj", "{6743C667-CC56-415E-B6E2-7346CC5CE17F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PetrelPush.Tests", "PetrelPush.Tests\PetrelPush.Tests.csproj", "{7EC8C7C8-01A1-4FC2-8447-91E1C311D25E}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{1EEEB108-52A0-4338-B40F-DE71101BA1CA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1EEEB108-52A0-4338-B40F-DE71101BA1CA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1EEEB108-52A0-4338-B40F-DE71101BA1CA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1EEEB108-52A0-4338-B40F-DE71101BA1CA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3C286CFC-99D8-4F92-8384-E90EEE8278C7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3C286CFC-99D8-4F92-8384-E90EEE8278C7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3C286CFC-99D8-4F92-8384-E90EEE8278C7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3C286CFC-99D8-4F92-8384-E90EEE8278C7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F8DC047E-46A5-413C-8726-04FBE5696558}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F8DC047E-46A5-413C-8726-04FBE5696558}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F8DC047E-46A5-413C-8726-04FBE5696558}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F8DC047E-46A5-413C-8726-04FBE5696558}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D61FF029-F219-4327-BC0E-89D86C474445}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D61FF029-F219-4327-BC0E-89D86C474445}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D61FF029-F219-4327-BC0E-89D86C474445}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D61FF029-F219-4327-BC0E-89D86C474445}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6743C667-CC56-415E-B6E2-7346CC5CE17F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6743C667-CC56-415E-B6E2-7346CC5CE17F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6743C667-CC56-415E-B6E2-7346CC5CE17F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6743C667-CC56-415E-B6E2-7346CC5CE17F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7EC8C7C8-01A1-4FC2-8447-91E1C311D25E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7EC8C7C8-01A1-4FC2-8447-91E1C311D25E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7EC8C7C8-01A1-4FC2-8447-91E1C311D25E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7EC8C7C8-01A1-4FC2-8447-91E1C311D25E}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

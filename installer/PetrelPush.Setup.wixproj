@@ -1,0 +1,28 @@
+<Project Sdk="WixToolset.Sdk/5.0.2">
+
+  <PropertyGroup>
+    <OutputType>Package</OutputType>
+    <OutputName>PetrelPushSetup</OutputName>
+    <Platform>x64</Platform>
+    <InstallerPlatform>x64</InstallerPlatform>
+
+    <!-- 由 build-msi.ps1 先 dotnet publish 生成；Files 元素按目录收集全部文件 -->
+    <AppPublishDir>$(MSBuildThisFileDirectory)..\artifacts\publish\</AppPublishDir>
+
+    <!-- MSI 产品版本（x.y.z），可由 build-msi.ps1 -Version 覆盖 -->
+    <ProductVersion Condition="'$(ProductVersion)' == ''">0.1.0</ProductVersion>
+    <DefineConstants>AppPublishDir=$(AppPublishDir);ProductVersion=$(ProductVersion)</DefineConstants>
+
+    <!--
+      ICE38/ICE43/ICE57：perMachine 包中的开始菜单快捷方式组件。该快捷方式实际写入
+      “所有用户”开始菜单（ALLUSERS=1），但 ICE 按用户配置目录判断并要求 HKCU KeyPath，
+      属保守静态检查，故在此抑制。
+    -->
+    <SuppressIces>ICE38;ICE43;ICE57</SuppressIces>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WixToolset.UI.wixext" Version="5.0.2" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,15 @@
+<Project>
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <!-- 本方案仅面向 Windows 客户端，DPAPI 等 Windows-only API 无需跨平台告警 -->
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <Company>PetrelPush</Company>
+    <Product>PetrelPush</Product>
+    <Copyright>Copyright © 2026 PetrelPush contributors</Copyright>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+</Project>

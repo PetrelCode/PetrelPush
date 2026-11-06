@@ -1,0 +1,30 @@
+# ---------- 构建输出 ----------
+bin/
+obj/
+artifacts/
+TestResults/
+*.binlog
+*.msi
+*.wixpdb
+*.wixobj
+*.cab
+
+# ---------- IDE / 本地配置 ----------
+.vs/
+.idea/
+.vscode/
+*.user
+*.suo
+*.DotSettings.user
+.codebuddy/
+
+# ---------- 操作系统 ----------
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# ---------- 本地运行数据 ----------
+logs/
+*.log
+state.db
+secrets.bin
