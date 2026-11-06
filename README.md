@@ -4,7 +4,7 @@
 
 > Windows → Linux 项目文件实时同步工具
 
-PetrelPush 是一款常驻系统托盘的 Windows 桌面工具：把本地项目目录**实时单向镜像**到 Linux 服务器（开发机 / 测试机 / 部署机）。远端只需要 sshd，不需要安装任何 agent；工具也**不读写你的 `.git`**，不会干扰 `git add / commit / gc / push`。
+PetrelPush 是 [PetrelCode](https://www.petrelcode.com) 旗下的 Windows 桌面工具，面向开发机、测试机与部署机的文件分发场景：把本地项目目录**实时单向镜像**到 Linux 服务器。远端只需要 sshd，不需要安装任何 agent；工具也**不读写你的 `.git`**，不会干扰 `git add / commit / gc / push`。
 
 ## 特性
 
@@ -16,9 +16,23 @@ PetrelPush 是一款常驻系统托盘的 Windows 桌面工具：把本地项目
 - **深度校验**：定期或手动忽略 mtime 捷径、全量重算哈希，兜住“内容变了但时间戳没变”
 - **传输优化**：SFTP 连接池（默认 4 路并发）、应用层限速、临时文件 + 原子 rename 写入
 - **安全**：主机指纹（TOFU）校验、密码 / 私钥两种认证、凭据经 Windows DPAPI 加密落盘、日志脱敏
-- **托盘 UI**：状态、配置、忽略规则、日志、帮助页面；立即同步、暂停 / 恢复、深度校验、开机自启
+- **托盘 UI**：状态、配置、忽略、日志、帮助五个页面；常驻托盘，支持开机自启
+- **常用操作**：立即同步、暂停 / 恢复、深度校验、重置失败任务
+- **状态总览**：待处理任务、失败任务、上次同步时间，附实时日志
+- **忽略排查**：忽略页编辑根目录 `.syncignore`，或粘贴路径查询“为什么这个文件没被同步”
+- **日志查看**：按级别筛选、打开日志目录、清空显示
 - **命令行**：`init / run / test / check-ignore / profiles`，便于首次验收和自动化
 - **MSI 安装包**：WiX 打包，自包含发布（无需预装 .NET），卸载清理用户数据
+
+## 界面预览
+
+| 状态 | 配置 |
+|---|---|
+| ![状态页](docs/screenshots/status.png) | ![配置页](docs/screenshots/config.png) |
+| **忽略规则** | **日志** |
+| ![忽略页](docs/screenshots/ignore.png) | ![日志页](docs/screenshots/log.png) |
+| **帮助 · 关于** | **帮助 · 说明文档** |
+| ![帮助-关于](docs/screenshots/help-about.png) | ![帮助-说明文档](docs/screenshots/help-guide.png) |
 
 ## 工作原理
 
@@ -41,7 +55,8 @@ Windows 本地目录
 |---|---|
 | 客户端 | Windows 10 / 11（x64） |
 | 服务端 | 任意 Linux，启用 sshd 与 SFTP 子系统（OpenSSH 默认配置即可） |
-| 运行时 | 安装包已自包含；从源码构建需 .NET 8 SDK |
+| 运行时 | 安装包自包含 .NET 8；从源码构建需 .NET 8 SDK |
+| 状态存储 | SQLite（WAL 模式） |
 | 打包 | WiX Toolset 5（通过 NuGet 自动还原，无需单独安装） |
 | 其他 | 不需要 Git、rsync 或远端 agent |
 
@@ -70,10 +85,14 @@ dotnet run --project PetrelPush.App
 
 ### 首次配置
 
-1. 打开「配置」页，填写本地目录、远端目录、主机、端口、用户名
-2. 选择认证方式：密码，或 OpenSSH 私钥（支持带口令的私钥）
-3. 点击「测试连接」：首次连接会固定主机指纹（TOFU），成功后配置保存并立即生效
-4. 回到「状态」页查看同步进度；「忽略」页编辑 `.syncignore`；「日志」页排查问题
+1. 打开「配置」页，填写**配置名称**与**本地目录**（Windows 路径）
+2. 填写**远端目录**（Linux 绝对路径，不存在会自动创建）
+3. 填写主机、端口、用户名，选择认证方式：**密码**（DPAPI 加密保存）或 **OpenSSH 私钥**（支持带口令的私钥）
+4. 点「测试连接」：首次连接会固定主机指纹（TOFU），成功后配置保存并立即生效
+5. 点「保存并应用」：首次会全量上传，完成后状态显示「已同步」
+6. 之后可在「忽略」页维护 `.syncignore`，在「日志」页按级别查看运行日志
+
+> 首次验收可先勾选 dry-run，只查看变更集而不写入远端。
 
 ### 命令行
 
@@ -155,3 +174,7 @@ dotnet test PetrelPush.Tests\PetrelPush.Tests.csproj -c Release
 ## 许可证
 
 [MIT](LICENSE)
+
+---
+
+© 2026 PetrelCode · [www.petrelcode.com](https://www.petrelcode.com)
