@@ -5,16 +5,6 @@
   <a href="https://github.com/PetrelCode/PetrelPush/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/PetrelCode/PetrelPush?sort=semver&amp;style=flat-square"></a>
   <a href="https://github.com/PetrelCode/PetrelPush/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/PetrelCode/PetrelPush/total?style=flat-square"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/PetrelCode/PetrelPush?style=flat-square"></a>
-  <a href="https://github.com/PetrelCode/PetrelPush/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/PetrelCode/PetrelPush?style=flat-square"></a>
-  <a href="https://github.com/PetrelCode/PetrelPush/releases"><img alt="Release date" src="https://img.shields.io/github/release-date/PetrelCode/PetrelPush?style=flat-square"></a>
-</p>
-
-<p>
-  <a href="https://github.com/PetrelCode/PetrelPush/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/PetrelCode/PetrelPush?style=flat-square"></a>
-  <a href="https://github.com/PetrelCode/PetrelPush/forks"><img alt="Forks" src="https://img.shields.io/github/forks/PetrelCode/PetrelPush?style=flat-square"></a>
-  <a href="https://github.com/PetrelCode/PetrelPush/issues"><img alt="Issues" src="https://img.shields.io/github/issues/PetrelCode/PetrelPush?style=flat-square"></a>
-  <a href="https://github.com/PetrelCode/PetrelPush/pulls"><img alt="Pull requests" src="https://img.shields.io/github/issues-pr/PetrelCode/PetrelPush?style=flat-square"></a>
-  <a href="https://github.com/PetrelCode/PetrelPush/graphs/contributors"><img alt="Contributors" src="https://img.shields.io/github/contributors/PetrelCode/PetrelPush?style=flat-square"></a>
 </p>
 
 <p>
@@ -25,13 +15,6 @@
   <img alt="State" src="https://img.shields.io/badge/state-SQLite%20WAL-003B57?style=flat-square&amp;logo=sqlite&amp;logoColor=white">
   <img alt="Installer" src="https://img.shields.io/badge/installer-MSI-5C2D91?style=flat-square">
   <a href="https://www.petrelcode.com"><img alt="Website" src="https://img.shields.io/badge/website-petrelcode.com-0F766E?style=flat-square&amp;logo=googlechrome&amp;logoColor=white"></a>
-</p>
-
-<p>
-  <a href="https://github.com/PetrelCode/PetrelPush"><img alt="Repo size" src="https://img.shields.io/github/repo-size/PetrelCode/PetrelPush?style=flat-square"></a>
-  <a href="https://github.com/PetrelCode/PetrelPush"><img alt="Code size" src="https://img.shields.io/github/languages/code-size/PetrelCode/PetrelPush?style=flat-square"></a>
-  <a href="https://github.com/PetrelCode/PetrelPush"><img alt="Top language" src="https://img.shields.io/github/languages/top/PetrelCode/PetrelPush?style=flat-square"></a>
-  <a href="https://github.com/PetrelCode/PetrelPush"><img alt="Commit activity" src="https://img.shields.io/github/commit-activity/m/PetrelCode/PetrelPush?style=flat-square"></a>
 </p>
 
 > Windows → Linux 项目文件实时同步工具
