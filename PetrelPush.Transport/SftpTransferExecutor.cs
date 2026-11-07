@@ -22,7 +22,7 @@ public sealed class SftpTransferExecutor : ITransferExecutor
     private readonly ILogger _logger;
     private readonly ConcurrentDictionary<string, byte> _knownDirectories = new(StringComparer.Ordinal);
 
-    public SftpTransferExecutor(SyncProfile profile, ILogger logger)
+    public SftpTransferExecutor(SyncProfile profile, ILogger logger, int? poolSize = null)
     {
         _logger = logger;
         var validator = new HostKeyValidator(profile.Remote.HostKeyFingerprint);
@@ -30,13 +30,16 @@ public sealed class SftpTransferExecutor : ITransferExecutor
         _pool = new SftpConnectionPool(
             profile.Remote,
             profile.Remote.Password,
-            Math.Max(1, profile.Sync.MaxParallelTransfers),
+            Math.Max(1, poolSize ?? profile.Sync.MaxParallelTransfers),
             validator,
             logger);
     }
 
     /// <summary>首次连接（测试连接）确认的主机指纹，调用方应写回配置。</summary>
     public event Action<string>? HostKeyTrusted;
+
+    /// <summary>上传字节进度：目标相对路径、已上传字节、文件总字节。</summary>
+    public event Action<string, long, long>? UploadProgress;
 
     public async Task<TransferOutcome> ExecuteAsync(SyncTask task, SyncProfile profile, CancellationToken cancellationToken)
     {
@@ -101,6 +104,98 @@ public sealed class SftpTransferExecutor : ITransferExecutor
         }
     }
 
+    /// <summary>
+    /// 列出远端目录的一层条目（只读浏览）。路径经 <see cref="PathGuard.Combine"/> 规范化，
+    /// 只能落在 remoteRoot 之内，不参与 diff 与任务队列。
+    /// </summary>
+    public async Task<IReadOnlyList<RemoteEntry>> ListDirectoryAsync(
+        string relativeDirectory,
+        SyncProfile profile,
+        int maxEntries,
+        CancellationToken cancellationToken)
+    {
+        using var lease = await _pool.AcquireAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await Task.Run(
+                () => ListDirectoryCore(lease.Client, profile, relativeDirectory, maxEntries, cancellationToken),
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (SyncFatalException)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex is SshException or SocketException or IOException or ObjectDisposedException or TimeoutException)
+        {
+            lease.MarkBroken();
+            throw;
+        }
+    }
+
+    /// <summary>把远端文件下载到本地：临时文件 + 大小校验 + 原子替换。</summary>
+    public async Task<RemoteDownloadResult> DownloadFileAsync(
+        string relativePath,
+        string localDestinationPath,
+        SyncProfile profile,
+        IProgress<long>? progress,
+        CancellationToken cancellationToken)
+    {
+        using var lease = await _pool.AcquireAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await Task.Run(
+                () => DownloadCore(lease.Client, profile, relativePath, localDestinationPath, progress, cancellationToken),
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (SyncFatalException)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex is SshException or SocketException or IOException or ObjectDisposedException or TimeoutException)
+        {
+            lease.MarkBroken();
+            throw;
+        }
+    }
+
+    /// <summary>把本地文件直接上传到远端指定相对路径（拖拽上传用，不经过本地同步目录）。</summary>
+    public async Task<long> UploadFileAsync(
+        string localFilePath,
+        string relativePath,
+        SyncProfile profile,
+        IProgress<long>? progress,
+        CancellationToken cancellationToken)
+    {
+        using var lease = await _pool.AcquireAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await Task.Run(
+                () => UploadCore(lease.Client, profile, localFilePath, relativePath, progress, cancellationToken),
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (SyncFatalException)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex is SshException or SocketException or IOException or ObjectDisposedException or TimeoutException)
+        {
+            lease.MarkBroken();
+            throw;
+        }
+    }
+
     public async Task<int> CleanupEmptyDirectoriesAsync(
         SyncProfile profile,
         IReadOnlySet<string> protectedDirectories,
@@ -115,6 +210,271 @@ public sealed class SftpTransferExecutor : ITransferExecutor
     public async ValueTask DisposeAsync()
     {
         await _pool.DisposeAsync().ConfigureAwait(false);
+    }
+
+    private List<RemoteEntry> ListDirectoryCore(
+        SftpClient client,
+        SyncProfile profile,
+        string relativeDirectory,
+        int maxEntries,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var root = PathGuard.NormalizeRemoteRoot(profile.RemoteRoot);
+        var directory = PathGuard.Combine(profile.RemoteRoot, relativeDirectory);
+        if (!client.Exists(directory))
+        {
+            throw new IOException($"远端目录不存在：{directory}");
+        }
+
+        var baseRelative = PathGuard.RelativeTo(root, directory);
+        var limit = Math.Clamp(maxEntries, 1, 20000);
+        var results = new List<RemoteEntry>();
+
+        foreach (var file in client.ListDirectory(directory))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (file.Name is "." or "..")
+            {
+                continue;
+            }
+
+            if (results.Count >= limit)
+            {
+                _logger.Debug("目录条目超过 {Limit} 条，已截断：{Directory}", limit, directory);
+                break;
+            }
+
+            var relative = baseRelative.Length == 0 ? file.Name : baseRelative + "/" + file.Name;
+            results.Add(ToRemoteEntry(file, relative));
+        }
+
+        results.Sort(CompareRemoteEntries);
+        return results;
+    }
+
+    private RemoteDownloadResult DownloadCore(
+        SftpClient client,
+        SyncProfile profile,
+        string relativePath,
+        string localDestinationPath,
+        IProgress<long>? progress,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var remotePath = PathGuard.Combine(profile.RemoteRoot, relativePath);
+        var attributes = client.GetAttributes(remotePath);
+        if (attributes.IsDirectory)
+        {
+            throw new IOException($"远端路径是目录，无法下载：{remotePath}");
+        }
+
+        var destination = Path.GetFullPath(localDestinationPath);
+        var directory = Path.GetDirectoryName(destination);
+        if (!string.IsNullOrEmpty(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        var temporaryPath = destination + ".dl_tmp_" + Guid.NewGuid().ToString("N");
+        try
+        {
+            using (var stream = new FileStream(
+                       temporaryPath,
+                       FileMode.Create,
+                       FileAccess.Write,
+                       FileShare.None,
+                       UploadBufferSize,
+                       FileOptions.SequentialScan))
+            {
+                client.DownloadFile(remotePath, stream, downloaded => progress?.Report((long)downloaded));
+                stream.Flush();
+
+                if (stream.Length != attributes.Size)
+                {
+                    throw new IOException(
+                        $"下载校验失败：远端 {attributes.Size} 字节，本地 {stream.Length} 字节（{relativePath}）");
+                }
+            }
+
+            File.Move(temporaryPath, destination, true);
+            _logger.Debug("下载 {Path}（{Size} 字节）→ {Destination}", relativePath, attributes.Size, destination);
+
+            var modified = new DateTimeOffset(DateTime.SpecifyKind(attributes.LastWriteTimeUtc, DateTimeKind.Utc));
+            return new RemoteDownloadResult(attributes.Size, modified);
+        }
+        catch
+        {
+            TryDeleteLocalFile(temporaryPath);
+            throw;
+        }
+    }
+
+    private long UploadCore(
+        SftpClient client,
+        SyncProfile profile,
+        string localFilePath,
+        string relativePath,
+        IProgress<long>? progress,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var info = new FileInfo(localFilePath);
+        if (!info.Exists)
+        {
+            throw new FileNotFoundException($"本地文件不存在：{localFilePath}", localFilePath);
+        }
+
+        var remotePath = PathGuard.Combine(profile.RemoteRoot, relativePath);
+        EnsureDirectory(client, PathGuard.ParentOf(remotePath));
+
+        var temporaryPath = remotePath + ".sync_tmp_" + Guid.NewGuid().ToString("N");
+        try
+        {
+            using (var stream = new FileStream(
+                       localFilePath,
+                       FileMode.Open,
+                       FileAccess.Read,
+                       FileShare.ReadWrite | FileShare.Delete,
+                       UploadBufferSize,
+                       FileOptions.SequentialScan))
+            {
+                client.UploadFile(stream, temporaryPath, true, uploaded => progress?.Report((long)uploaded));
+            }
+
+            var remoteSize = client.GetAttributes(temporaryPath).Size;
+            if (remoteSize != info.Length)
+            {
+                throw new IOException(
+                    $"上传校验失败：本地 {info.Length} 字节，远端 {remoteSize} 字节（{relativePath}）");
+            }
+
+            RenameWithOverwrite(client, temporaryPath, remotePath);
+            ApplyExecutablePermissions(client, remotePath, relativePath, profile);
+            _logger.Debug("直接上传 {Path}（{Size} 字节）", relativePath, info.Length);
+            return info.Length;
+        }
+        catch
+        {
+            TryDeleteFile(client, temporaryPath);
+            throw;
+        }
+    }
+
+    private static RemoteEntry ToRemoteEntry(ISftpFile file, string relativePath)
+    {
+        try
+        {
+            var attributes = file.Attributes;
+            var isDirectory = attributes?.IsDirectory ?? file.IsDirectory;
+            var isSymbolicLink = attributes?.IsSymbolicLink ?? file.IsSymbolicLink;
+            var isRegularFile = attributes?.IsRegularFile ?? file.IsRegularFile;
+            var permissions = attributes is null ? string.Empty : FormatPermissions(attributes);
+            var modified = new DateTimeOffset(DateTime.SpecifyKind(file.LastWriteTimeUtc, DateTimeKind.Utc));
+
+            return new RemoteEntry(
+                file.Name,
+                relativePath,
+                isDirectory,
+                isSymbolicLink,
+                !isDirectory && !isRegularFile && !isSymbolicLink,
+                isDirectory ? 0 : file.Length,
+                modified,
+                permissions);
+        }
+        catch (Exception ex) when (ex is SshException or IOException or FormatException or ArgumentException or InvalidOperationException)
+        {
+            // 单个条目属性异常不影响整目录浏览
+            return new RemoteEntry(
+                file.Name,
+                relativePath,
+                file.IsDirectory,
+                false,
+                false,
+                0,
+                DateTimeOffset.MinValue,
+                string.Empty);
+        }
+    }
+
+    /// <summary>把 SSH.NET 的布尔权限位拼成八进制（如 644）。</summary>
+    private static string FormatPermissions(SftpFileAttributes attributes)
+    {
+        var value = 0;
+        if (attributes.OwnerCanRead)
+        {
+            value |= 0b100_000_000;
+        }
+
+        if (attributes.OwnerCanWrite)
+        {
+            value |= 0b010_000_000;
+        }
+
+        if (attributes.OwnerCanExecute)
+        {
+            value |= 0b001_000_000;
+        }
+
+        if (attributes.GroupCanRead)
+        {
+            value |= 0b000_100_000;
+        }
+
+        if (attributes.GroupCanWrite)
+        {
+            value |= 0b000_010_000;
+        }
+
+        if (attributes.GroupCanExecute)
+        {
+            value |= 0b000_001_000;
+        }
+
+        if (attributes.OthersCanRead)
+        {
+            value |= 0b000_000_100;
+        }
+
+        if (attributes.OthersCanWrite)
+        {
+            value |= 0b000_000_010;
+        }
+
+        if (attributes.OthersCanExecute)
+        {
+            value |= 0b000_000_001;
+        }
+
+        return Convert.ToString(value, 8).PadLeft(3, '0');
+    }
+
+    private static int CompareRemoteEntries(RemoteEntry left, RemoteEntry right)
+    {
+        if (left.IsDirectory != right.IsDirectory)
+        {
+            return left.IsDirectory ? -1 : 1;
+        }
+
+        return string.Compare(left.Name, right.Name, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void TryDeleteLocalFile(string localPath)
+    {
+        try
+        {
+            if (File.Exists(localPath))
+            {
+                File.Delete(localPath);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.Debug(ex, "清理本地临时文件失败：{Path}", localPath);
+        }
     }
 
     private TransferOutcome ExecuteCore(
@@ -171,7 +531,23 @@ public sealed class SftpTransferExecutor : ITransferExecutor
                 UploadBufferSize,
                 FileOptions.SequentialScan);
             using var hashing = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-            using var uploadStream = new HashingUploadStream(file, hashing, limiter, cancellationToken);
+
+            // 按 1% 粒度上报，避免每个 SFTP 缓冲包都触发一次 UI 更新
+            var totalBytes = info.Length;
+            var lastStep = 0L;
+            void ReportUpload(long done)
+            {
+                var step = totalBytes <= 0 ? 100 : (long)Math.Floor(done * 100.0 / totalBytes);
+                if (step == lastStep)
+                {
+                    return;
+                }
+
+                lastStep = step;
+                UploadProgress?.Invoke(task.DstPath, done, totalBytes);
+            }
+
+            using var uploadStream = new HashingUploadStream(file, hashing, limiter, cancellationToken, ReportUpload);
 
             client.UploadFile(uploadStream, temporaryPath, true);
 
@@ -184,6 +560,9 @@ public sealed class SftpTransferExecutor : ITransferExecutor
             var hash = hashing.GetHashAndReset();
             RenameWithOverwrite(client, temporaryPath, remotePath);
             ApplyExecutablePermissions(client, remotePath, task.DstPath, profile);
+
+            // 补一次终态，保证 UI 收到 100%
+            UploadProgress?.Invoke(task.DstPath, totalBytes, totalBytes);
 
             _logger.Debug("上传 {Path}（{Size} 字节）", task.DstPath, info.Length);
             return new TransferOutcome(hash, EntryKind.File);

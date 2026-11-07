@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Serilog;
 using PetrelPush.Core.Abstractions;
 using PetrelPush.Core.Model;
@@ -20,6 +21,9 @@ public sealed class SyncEngine : IAsyncDisposable
     private readonly SemaphoreSlim _wake = new(0, 1);
     private readonly SemaphoreSlim _cycleGate = new(1, 1);
     private readonly object _statusGate = new();
+
+    private long _lastProgressTimestamp;
+    private int _lastProgressCompleted;
 
     private Task? _loop;
     private FileSystemWatcher? _watcher;
@@ -49,9 +53,13 @@ public sealed class SyncEngine : IAsyncDisposable
         _logger = logger;
         _runner = new CycleRunner(store, transport, logger);
         _runner.Progress += OnProgress;
+        _runner.TransferProgress += OnTransferProgress;
     }
 
     public event EventHandler<EngineStatus>? StatusChanged;
+
+    /// <summary>本轮传输进度（已完成 / 总数 / 当前文件字节进度），已按 100ms 节流。</summary>
+    public event EventHandler<TransferProgressInfo>? TransferProgress;
 
     public event Action<string>? LogLine;
 
@@ -178,6 +186,7 @@ public sealed class SyncEngine : IAsyncDisposable
         _disposed = true;
         await StopAsync().ConfigureAwait(false);
         _runner.Progress -= OnProgress;
+        _runner.TransferProgress -= OnTransferProgress;
         _wake.Dispose();
         _cycleGate.Dispose();
         _cts.Dispose();
@@ -296,7 +305,7 @@ public sealed class SyncEngine : IAsyncDisposable
             await RefreshCountsAsync(cancellationToken).ConfigureAwait(false);
             UpdateStatus(
                 EnginePhase.Idle,
-                $"上次同步 {_lastCycleAt:HH:mm:ss}：扫描 {result.ScannedFiles} 文件 / {result.ScannedDirectories} 目录，完成 {result.ExecutedTasks}，失败 {result.FailedTasks}");
+                $"上次同步 {_lastCycleAt.Value.ToLocalTime():HH:mm:ss}：扫描 {result.ScannedFiles} 文件 / {result.ScannedDirectories} 目录，完成 {result.ExecutedTasks}，失败 {result.FailedTasks}");
 
             if (Volatile.Read(ref _pending) == 0)
             {
@@ -500,6 +509,24 @@ public sealed class SyncEngine : IAsyncDisposable
 
         UpdateStatus(phase, message);
         LogLine?.Invoke(message);
+    }
+
+    private void OnTransferProgress(TransferProgressInfo info)
+    {
+        // 关键节点（单个任务完成 / 全部完成 / 无任务）立即上报，中间进度按 100ms 节流，避免刷爆 UI
+        var now = Stopwatch.GetTimestamp();
+        var elapsedMs = (now - _lastProgressTimestamp) * 1000.0 / Stopwatch.Frequency;
+        var isKeyFrame = info.Total == 0
+                         || info.Completed >= info.Total
+                         || info.Completed != Volatile.Read(ref _lastProgressCompleted);
+        if (!isKeyFrame && elapsedMs < 100)
+        {
+            return;
+        }
+
+        Interlocked.Exchange(ref _lastProgressTimestamp, now);
+        Interlocked.Exchange(ref _lastProgressCompleted, info.Completed);
+        TransferProgress?.Invoke(this, info);
     }
 
     private void UpdateStatus(EnginePhase phase, string? message = null, string? error = null)

@@ -9,6 +9,238 @@
         FontSize="13"
         Foreground="{StaticResource TextPrimaryBrush}"
         Background="{StaticResource PageBackgroundBrush}">
+
+    <Window.Resources>
+        <!-- 文件页行样式：悬停 / 选中 -->
+        <Style x:Key="FileRow" TargetType="ListBoxItem">
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="16,4" />
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Bd" Background="Transparent" CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource BrandSoftBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#EFE6FB" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="FileList" TargetType="ListBox">
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Padding" Value="0,0,0,8" />
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+            <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
+            <Setter Property="VirtualizingPanel.IsVirtualizing" Value="True" />
+            <Setter Property="VirtualizingPanel.VirtualizationMode" Value="Recycling" />
+            <Setter Property="ItemContainerStyle" Value="{StaticResource FileRow}" />
+        </Style>
+
+        <Style x:Key="FileHeaderText" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+        </Style>
+
+        <!-- 路径条：小尺寸文字按钮 -->
+        <Style x:Key="PathCopyButton" TargetType="Button">
+            <Setter Property="Foreground" Value="{StaticResource BrandBrush}" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Padding" Value="6,1" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Width" Value="46" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="Transparent" CornerRadius="5"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#EAE0F8" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#DCCDF7" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 路径条：只读路径 + 复制按钮 -->
+        <Style x:Key="PathBar" TargetType="Border">
+            <Setter Property="Background" Value="#FAF8FD" />
+            <Setter Property="BorderBrush" Value="{StaticResource SoftBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="8,3" />
+        </Style>
+
+        <!-- 文件页右键菜单：与卡片风格一致 -->
+        <Style x:Key="FileContextMenu" TargetType="ContextMenu">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource SoftBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="0,4" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ContextMenu">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8"
+                                Padding="{TemplateBinding Padding}">
+                            <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="FileContextMenuItem" TargetType="MenuItem">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Padding" Value="10,5" />
+            <Setter Property="MinWidth" Value="168" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="MenuItem">
+                        <Border x:Name="Bd" Background="Transparent" CornerRadius="6"
+                                Margin="4,1" Padding="{TemplateBinding Padding}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <ContentPresenter Grid.Column="0" ContentSource="Icon"
+                                                  Width="24" Height="24" Margin="0,0,10,0"
+                                                  VerticalAlignment="Center" />
+                                <ContentPresenter Grid.Column="1" ContentSource="Header"
+                                                  VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#F6F1FE" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <DataTemplate x:Key="LocalFileRowTemplate">
+            <Grid ToolTip="{Binding ToolTip}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="84" />
+                    <ColumnDefinition Width="120" />
+                    <ColumnDefinition Width="58" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <Image Source="{Binding Icon}" Width="16" Height="16" Margin="0,0,8,0"
+                           VerticalAlignment="Center"
+                           RenderOptions.BitmapScalingMode="HighQuality" />
+                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+                <TextBlock Grid.Column="1" Text="{Binding SizeText}" FontSize="12"
+                           HorizontalAlignment="Right" Margin="0,0,8,0"
+                           Foreground="{StaticResource TextSecondaryBrush}" />
+                <TextBlock Grid.Column="2" Text="{Binding TimeText}" FontSize="12"
+                           Foreground="{StaticResource TextSecondaryBrush}" />
+                <TextBlock Grid.Column="3" Text="{Binding StateText}" FontSize="11"
+                           HorizontalAlignment="Right" Foreground="{Binding StateBrush}" />
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate x:Key="RemoteFileRowTemplate">
+            <Grid ToolTip="{Binding ToolTip}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="84" />
+                    <ColumnDefinition Width="120" />
+                    <ColumnDefinition Width="40" />
+                    <ColumnDefinition Width="58" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <Image Source="{Binding Icon}" Width="16" Height="16" Margin="0,0,8,0"
+                           VerticalAlignment="Center"
+                           RenderOptions.BitmapScalingMode="HighQuality" />
+                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+                <TextBlock Grid.Column="1" Text="{Binding SizeText}" FontSize="12"
+                           HorizontalAlignment="Right" Margin="0,0,8,0"
+                           Foreground="{StaticResource TextSecondaryBrush}" />
+                <TextBlock Grid.Column="2" Text="{Binding TimeText}" FontSize="12"
+                           Foreground="{StaticResource TextSecondaryBrush}" />
+                <TextBlock Grid.Column="3" Text="{Binding Permissions}" FontSize="11"
+                           FontFamily="Consolas" Foreground="{StaticResource TextMutedBrush}" />
+                <TextBlock Grid.Column="4" Text="{Binding StateText}" FontSize="11"
+                           HorizontalAlignment="Right" Foreground="{Binding StateBrush}" />
+            </Grid>
+        </DataTemplate>
+
+        <!-- 细进度条：传输面板逐文件复用 -->
+        <Style x:Key="ThinProgress" TargetType="ProgressBar">
+            <Setter Property="Height" Value="4" />
+            <Setter Property="Minimum" Value="0" />
+            <Setter Property="Maximum" Value="100" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ProgressBar">
+                        <Grid x:Name="PART_Track">
+                            <Border Background="#EDE7F6" CornerRadius="2" />
+                            <Border x:Name="PART_Indicator" HorizontalAlignment="Left"
+                                    Background="{StaticResource BrandBrush}" CornerRadius="2" />
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 传输面板：单个进行中文件一行 -->
+        <DataTemplate x:Key="TransferRowTemplate">
+            <StackPanel Margin="0,7,0,0">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="{Binding Name}" FontSize="11"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding PercentText}" FontSize="11" MinWidth="34"
+                                   TextAlignment="Right"
+                                   Foreground="{StaticResource TextSecondaryBrush}" />
+                        <TextBlock Text="{Binding SpeedText}" FontSize="11" MinWidth="76"
+                                   Margin="10,0,0,0" TextAlignment="Right"
+                                   Foreground="{StaticResource TextMutedBrush}" />
+                    </StackPanel>
+                </Grid>
+                <!-- ProgressBar.Value 默认 TwoWay，这里只用单向显示 -->
+                <ProgressBar Style="{StaticResource ThinProgress}" Value="{Binding Percent, Mode=OneWay}"
+                             Margin="0,4,0,0" />
+            </StackPanel>
+        </DataTemplate>
+    </Window.Resources>
+
     <DockPanel>
         <Border DockPanel.Dock="Bottom" Padding="18,8">
             <TextBlock x:Name="StatusBarText"
@@ -46,6 +278,8 @@
                                  IsChecked="True" Style="{StaticResource NavButton}" Click="OnNavigate" />
                     <RadioButton x:Name="NavConfig" Content="配置" Tag="config" GroupName="Nav"
                                  Style="{StaticResource NavButton}" Click="OnNavigate" />
+                    <RadioButton x:Name="NavFiles" Content="文件" Tag="files" GroupName="Nav"
+                                 Style="{StaticResource NavButton}" Click="OnNavigate" />
                     <RadioButton x:Name="NavIgnore" Content="忽略" Tag="ignore" GroupName="Nav"
                                  Style="{StaticResource NavButton}" Click="OnNavigate" />
                     <RadioButton x:Name="NavLog" Content="日志" Tag="log" GroupName="Nav"
@@ -54,14 +288,11 @@
                                  Style="{StaticResource NavButton}" Click="OnNavigate" />
                 </StackPanel>
 
-                <Border Grid.Column="2" x:Name="PhaseBadge" CornerRadius="14" Padding="12,6"
+                <Border Grid.Column="2" x:Name="PhaseBadge" CornerRadius="12" Padding="14,6"
                         VerticalAlignment="Center" Background="{StaticResource BrandSoftBrush}">
-                    <StackPanel Orientation="Horizontal">
-                        <Ellipse x:Name="PhaseDot" Width="8" Height="8" Margin="0,0,6,0"
-                                 VerticalAlignment="Center" Fill="{StaticResource BrandBrush}" />
-                        <TextBlock x:Name="PhaseText" Text="已停止" FontSize="12"
-                                   FontWeight="SemiBold" Foreground="{StaticResource BrandBrush}" />
-                    </StackPanel>
+                    <TextBlock x:Name="PhaseText" Text="已停止" FontSize="12" FontWeight="SemiBold"
+                               MaxWidth="160" TextTrimming="CharacterEllipsis"
+                               Foreground="{StaticResource BrandBrush}" />
                 </Border>
             </Grid>
         </Border>
@@ -105,7 +336,7 @@
 
                 <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,16,0,0">
                     <Button Content="立即同步" Style="{StaticResource PrimaryButton}" Click="OnSyncNow" />
-                    <Button x:Name="PauseButton" Content="暂停" Style="{StaticResource SecondaryButton}"
+                    <Button x:Name="PauseButton" Content="暂停" Style="{StaticResource DangerButton}"
                             Margin="8,0,0,0" Click="OnPauseResume" />
                     <Button Content="深度校验" Style="{StaticResource SecondaryButton}"
                             Margin="8,0,0,0" Click="OnDeepVerify" />
@@ -264,6 +495,265 @@
                 </StackPanel>
             </ScrollViewer>
 
+            <!-- 文件：本地 / 远端双栏浏览 -->
+            <Grid x:Name="PageFiles" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <Grid Grid.Row="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="12" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- 本地 -->
+                    <Border Grid.Column="0" Style="{StaticResource Card}" Padding="0">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+
+                            <Grid Grid.Row="0" Margin="16,12,12,4">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="Windows 本地" FontWeight="SemiBold" />
+                                    <TextBlock x:Name="LocalCountText" FontSize="11" Margin="8,0,0,0"
+                                               Foreground="{StaticResource TextMutedBrush}" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <Button Content="上一级" Width="72" MinHeight="28" Padding="10,3" Click="OnLocalUp" />
+                                    <Button Content="刷新" Width="60" MinHeight="28" Padding="10,3"
+                                            Margin="6,0,0,0" Click="OnLocalRefresh" />
+                                </StackPanel>
+                            </Grid>
+
+                            <Border Grid.Row="1" Style="{StaticResource PathBar}" Margin="16,0,16,8">
+                                <DockPanel>
+                                    <Path DockPanel.Dock="Left" Width="12" Height="12"
+                                          Data="M1.6,3.4 A1.3,1.3 0 0 1 2.9,2.1 H4.9 L6.1,3.5 H9.4 A1.3,1.3 0 0 1 10.7,4.8 V9 A1.3,1.3 0 0 1 9.4,10.3 H2.9 A1.3,1.3 0 0 1 1.6,9 Z"
+                                          Stroke="{StaticResource TextMutedBrush}" StrokeThickness="1"
+                                          StrokeLineJoin="Round" Margin="0,0,6,0"
+                                          VerticalAlignment="Center" />
+                                    <Button x:Name="LocalCopyButton" DockPanel.Dock="Right" Content="复制"
+                                            Style="{StaticResource PathCopyButton}"
+                                            Margin="6,0,0,0" Click="OnCopyPath" />
+                                    <TextBlock x:Name="LocalPathText" FontSize="11"
+                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" />
+                                </DockPanel>
+                            </Border>
+
+                            <Grid Grid.Row="2">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+
+                                <Grid Grid.Row="0" Margin="16,0,16,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="84" />
+                                        <ColumnDefinition Width="120" />
+                                        <ColumnDefinition Width="58" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="名称" Style="{StaticResource FileHeaderText}" />
+                                    <TextBlock Grid.Column="1" Text="大小" Style="{StaticResource FileHeaderText}"
+                                               HorizontalAlignment="Right" Margin="0,0,8,0" />
+                                    <TextBlock Grid.Column="2" Text="修改时间" Style="{StaticResource FileHeaderText}" />
+                                    <TextBlock Grid.Column="3" Text="状态" Style="{StaticResource FileHeaderText}"
+                                               HorizontalAlignment="Right" />
+                                </Grid>
+
+                                <ListBox Grid.Row="1" x:Name="LocalFileList" Style="{StaticResource FileList}"
+                                         ItemTemplate="{StaticResource LocalFileRowTemplate}"
+                                         SelectionMode="Single" MouseDoubleClick="OnLocalDoubleClick"
+                                         AllowDrop="True" DragOver="OnLocalDragOver" Drop="OnLocalDrop"
+                                         PreviewMouseRightButtonDown="OnLocalListRightButtonDown"
+                                         ContextMenuOpening="OnLocalContextMenuOpening">
+                                    <ListBox.ContextMenu>
+                                        <ContextMenu Style="{StaticResource FileContextMenu}">
+                                            <MenuItem x:Name="LocalRefreshMenuItem" Header="刷新列表"
+                                                      Style="{StaticResource FileContextMenuItem}"
+                                                      Click="OnLocalRefresh">
+                                                <MenuItem.Icon>
+                                                    <Border Width="24" Height="24" CornerRadius="7"
+                                                            Background="#EAE0F8">
+                                                        <Path Width="16" Height="16"
+                                                              Data="M13.4,8 A5.4,5.4 0 1 1 11.8,4.1 M11.8,4.1 H14.3 M11.8,4.1 V1.6"
+                                                              Stroke="{StaticResource BrandBrush}"
+                                                              StrokeThickness="1.5"
+                                                              StrokeStartLineCap="Round"
+                                                              StrokeEndLineCap="Round"
+                                                              StrokeLineJoin="Round"
+                                                              HorizontalAlignment="Center"
+                                                              VerticalAlignment="Center" />
+                                                    </Border>
+                                                </MenuItem.Icon>
+                                            </MenuItem>
+                                            <MenuItem x:Name="LocalOpenExplorerMenuItem" Header="在资源管理器中打开"
+                                                      Style="{StaticResource FileContextMenuItem}"
+                                                      Click="OnOpenInExplorer">
+                                                <MenuItem.Icon>
+                                                    <Border Width="24" Height="24" CornerRadius="7"
+                                                            Background="#EAE0F8">
+                                                        <Path Width="16" Height="16"
+                                                              Data="M2,4.4 A1.6,1.6 0 0 1 3.6,2.8 H6.2 L7.6,4.6 H12.4 A1.6,1.6 0 0 1 14,6.2 V11.6 A1.6,1.6 0 0 1 12.4,13.2 H3.6 A1.6,1.6 0 0 1 2,11.6 Z"
+                                                              Stroke="{StaticResource BrandBrush}"
+                                                              StrokeThickness="1.5"
+                                                              StrokeStartLineCap="Round"
+                                                              StrokeEndLineCap="Round"
+                                                              StrokeLineJoin="Round"
+                                                              HorizontalAlignment="Center"
+                                                              VerticalAlignment="Center" />
+                                                    </Border>
+                                                </MenuItem.Icon>
+                                            </MenuItem>
+                                            <MenuItem x:Name="LocalDeleteMenuItem" Header="删除"
+                                                      Style="{StaticResource FileContextMenuItem}"
+                                                      Click="OnLocalDelete">
+                                                <MenuItem.Icon>
+                                                    <Border Width="24" Height="24" CornerRadius="7"
+                                                            Background="#FBE9E7">
+                                                        <Path Width="16" Height="16"
+                                                              Data="M4.5,5 L5.4,13.4 A1.2,1.2 0 0 0 6.6,14.5 H9.4 A1.2,1.2 0 0 0 10.6,13.4 L11.5,5 M3,5 H13 M6.4,5 V3.6 A0.9,0.9 0 0 1 7.3,2.7 H8.7 A0.9,0.9 0 0 1 9.6,3.6 V5 M7.2,7.6 V11.8 M8.8,7.6 V11.8"
+                                                              Stroke="#D0342C"
+                                                              StrokeThickness="1.4"
+                                                              StrokeStartLineCap="Round"
+                                                              StrokeEndLineCap="Round"
+                                                              StrokeLineJoin="Round"
+                                                              HorizontalAlignment="Center"
+                                                              VerticalAlignment="Center" />
+                                                    </Border>
+                                                </MenuItem.Icon>
+                                            </MenuItem>
+                                        </ContextMenu>
+                                    </ListBox.ContextMenu>
+                                </ListBox>
+                            </Grid>
+                        </Grid>
+                    </Border>
+
+                    <!-- 远端 -->
+                    <Border Grid.Column="2" Style="{StaticResource Card}" Padding="0">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+
+                            <Grid Grid.Row="0" Margin="16,12,12,4">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="Linux 远端" FontWeight="SemiBold" />
+                                    <TextBlock x:Name="RemoteCountText" FontSize="11" Margin="8,0,0,0"
+                                               Foreground="{StaticResource TextMutedBrush}" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <Button Content="上一级" Width="72" MinHeight="28" Padding="10,3" Click="OnRemoteUp" />
+                                    <Button Content="刷新" Width="60" MinHeight="28" Padding="10,3"
+                                            Margin="6,0,0,0" Click="OnRemoteRefresh" />
+                                </StackPanel>
+                            </Grid>
+
+                            <Border Grid.Row="1" Style="{StaticResource PathBar}" Margin="16,0,16,8">
+                                <DockPanel>
+                                    <Path DockPanel.Dock="Left" Width="12" Height="12"
+                                          Data="M2.2,2.8 H9.8 V6 H2.2 Z M2.2,7 H9.8 V10.2 H2.2 Z M3.7,4.4 H3.71 M3.7,8.6 H3.71"
+                                          Stroke="{StaticResource TextMutedBrush}" StrokeThickness="1"
+                                          StrokeLineJoin="Round" StrokeStartLineCap="Round"
+                                          StrokeEndLineCap="Round" Margin="0,0,6,0"
+                                          VerticalAlignment="Center" />
+                                    <Button x:Name="RemoteCopyButton" DockPanel.Dock="Right" Content="复制"
+                                            Style="{StaticResource PathCopyButton}"
+                                            Margin="6,0,0,0" Click="OnCopyPath" />
+                                    <TextBlock x:Name="RemotePathText" FontSize="11"
+                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" />
+                                </DockPanel>
+                            </Border>
+
+                            <Grid Grid.Row="2">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+
+                                <Grid Grid.Row="0" Margin="16,0,16,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="84" />
+                                        <ColumnDefinition Width="120" />
+                                        <ColumnDefinition Width="40" />
+                                        <ColumnDefinition Width="58" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="名称" Style="{StaticResource FileHeaderText}" />
+                                    <TextBlock Grid.Column="1" Text="大小" Style="{StaticResource FileHeaderText}"
+                                               HorizontalAlignment="Right" Margin="0,0,8,0" />
+                                    <TextBlock Grid.Column="2" Text="修改时间" Style="{StaticResource FileHeaderText}" />
+                                    <TextBlock Grid.Column="3" Text="权限" Style="{StaticResource FileHeaderText}"
+                                               ToolTip="Linux 权限位（八进制）：644 = rw-r--r--，属主可读写，同组与其他用户只读；755 = 属主可读写执行，其他人可读执行" />
+                                    <TextBlock Grid.Column="4" Text="状态" Style="{StaticResource FileHeaderText}"
+                                               HorizontalAlignment="Right" />
+                                </Grid>
+
+                                <ListBox Grid.Row="1" x:Name="RemoteFileList" Style="{StaticResource FileList}"
+                                         ItemTemplate="{StaticResource RemoteFileRowTemplate}"
+                                         SelectionMode="Single" MouseDoubleClick="OnRemoteDoubleClick"
+                                         AllowDrop="True" DragOver="OnRemoteDragOver" Drop="OnRemoteDrop"
+                                         PreviewMouseRightButtonDown="OnRemoteListRightButtonDown"
+                                         ContextMenuOpening="OnRemoteContextMenuOpening">
+                                    <ListBox.ContextMenu>
+                                        <ContextMenu Style="{StaticResource FileContextMenu}">
+                                            <MenuItem Header="刷新列表" Style="{StaticResource FileContextMenuItem}"
+                                                      Click="OnRemoteRefresh">
+                                                <MenuItem.Icon>
+                                                    <Border Width="24" Height="24" CornerRadius="7"
+                                                            Background="#EAE0F8">
+                                                        <Path Width="16" Height="16"
+                                                              Data="M13.4,8 A5.4,5.4 0 1 1 11.8,4.1 M11.8,4.1 H14.3 M11.8,4.1 V1.6"
+                                                              Stroke="{StaticResource BrandBrush}"
+                                                              StrokeThickness="1.5"
+                                                              StrokeStartLineCap="Round"
+                                                              StrokeEndLineCap="Round"
+                                                              StrokeLineJoin="Round"
+                                                              HorizontalAlignment="Center"
+                                                              VerticalAlignment="Center" />
+                                                    </Border>
+                                                </MenuItem.Icon>
+                                            </MenuItem>
+                                            <MenuItem x:Name="RemoteDownloadMenuItem" Header="下载到…"
+                                                      Style="{StaticResource FileContextMenuItem}"
+                                                      Click="OnDownloadSelected">
+                                                <MenuItem.Icon>
+                                                    <Border Width="24" Height="24" CornerRadius="7"
+                                                            Background="#EAE0F8">
+                                                        <Path Width="16" Height="16"
+                                                              Data="M8,2.5 V10.5 M4.2,6.9 L8,10.7 L11.8,6.9 M3,13.8 H13"
+                                                              Stroke="{StaticResource BrandBrush}"
+                                                              StrokeThickness="1.5"
+                                                              StrokeStartLineCap="Round"
+                                                              StrokeEndLineCap="Round"
+                                                              StrokeLineJoin="Round"
+                                                              HorizontalAlignment="Center"
+                                                              VerticalAlignment="Center" />
+                                                    </Border>
+                                                </MenuItem.Icon>
+                                            </MenuItem>
+                                        </ContextMenu>
+                                    </ListBox.ContextMenu>
+                                </ListBox>
+                            </Grid>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Grid>
+
             <!-- 忽略 -->
             <Grid x:Name="PageIgnore" Visibility="Collapsed">
                 <Grid.RowDefinitions>
@@ -369,6 +859,8 @@
                                     <TextBlock Text="• 秒级响应：文件保存后经去抖合并上传；断线自动重试，重启后自动对账" TextWrapping="Wrap" Margin="0,4,0,0" />
                                     <TextBlock Text="• 远端零依赖：只需 sshd，纯 SFTP 传输，上传采用临时文件 + 原子改名" TextWrapping="Wrap" Margin="0,4,0,0" />
                                     <TextBlock Text="• 支持空目录、仅大小写改名、可执行位（.sh / .py）；忽略规则兼容 .gitignore" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                    <TextBlock Text="• 文件页并排浏览本地与远端目录、标记差异，可把远端文件下载到本地" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                    <TextBlock Text="• 右上角胶囊只显示当前状态文字；传输过程在右下角面板按文件逐行显示各自的进度与速度，面板顶部只显示本轮已完成 / 待同步数量，手动下载时同一面板显示单行下载进度" TextWrapping="Wrap" Margin="0,4,0,0" />
                                 </StackPanel>
                             </Border>
 
@@ -392,6 +884,27 @@
                                     <TextBlock Text="• 深度校验：忽略时间戳捷径、全部重算哈希，建议每周或怀疑漏传时执行。" TextWrapping="Wrap" Margin="0,4,0,0" />
                                     <TextBlock Text="• 重置失败任务：失败次数达到上限后，可把任务放回队列重试。" TextWrapping="Wrap" Margin="0,4,0,0" />
                                     <TextBlock Text="• 托盘：双击打开窗口；关闭窗口只是隐藏，同步仍在后台运行。" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                    <TextBlock Text="• 文件：并排查看本地与远端目录，双击进入子目录，选中远端文件可下载。" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="文件浏览与下载" FontWeight="SemiBold" FontSize="14" Margin="0,0,0,8" />
+                                    <TextBlock Text="「文件」页把 Windows 本地目录与 Linux 远端目录并排显示，逐层加载，不会一次性递归整个目录树。" TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" />
+                                    <TextBlock Text="• 本地状态：已同步（远端已知态一致）/ 待上传（尚未上传）/ 已忽略（被忽略规则排除）" TextWrapping="Wrap" Margin="0,8,0,0" />
+                                    <TextBlock Text="• 远端状态：本地存在 / 仅远端（远端残留或手工新增的文件）" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                    <TextBlock Text="• 浏览范围始终限制在「配置」页的远端目录之内，不会越出到系统目录" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                    <TextBlock Text="• 图标按扩展名取自 Windows 系统图标，与资源管理器一致" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                    <TextBlock Text="• 下载：在远端文件上右键选「下载到…」；默认保存到系统「下载」目录" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                    <TextBlock Text="• 若把文件保存到同步目录之内，它会被当作本地变更再次上传，界面会二次确认" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                    <TextBlock Text="• 权限列是 Linux 八进制权限位：644 = rw-r--r--（属主可读写，同组与其他用户只读），755 额外带执行权限；悬停行可看符号形式" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                    <TextBlock Text="• 单个目录超过 2000 项时只显示前 2000 项，请进入子目录查看" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                    <TextBlock Text="• 拖拽上传：把文件拖到左侧本地列表会复制到本地当前目录（由同步引擎上传）；拖到右侧远端列表会直接上传到远端当前目录，不落本地" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                    <TextBlock Text="• 路径条右侧「复制」可复制当前路径；本地列表右键可「在资源管理器中打开」（选中文件时定位到该文件）" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                    <TextBlock Text="• 本地列表右键「删除」会把条目移到回收站，远端对应内容在下一轮同步中被删除（单向镜像语义）" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                    <TextBlock Text="• 操作结果与失败原因以窗口底部消息条短暂显示（成功约 3 秒、失败约 6 秒），不遮挡文件列表" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                    <TextBlock Text="提示：远端浏览与下载是只读的；拖拽上传只写入远端、不进入同步队列，该文件之后会显示为「仅远端」，引擎不会自动删除。" TextWrapping="Wrap" Margin="0,10,0,0" Foreground="{StaticResource TextSecondaryBrush}" />
                                 </StackPanel>
                             </Border>
 
@@ -459,6 +972,7 @@
                                         <Border Style="{StaticResource Chip}"><TextBlock Text="忽略规则" FontSize="12" Foreground="{StaticResource BrandBrush}" /></Border>
                                         <Border Style="{StaticResource Chip}"><TextBlock Text="断线重试" FontSize="12" Foreground="{StaticResource BrandBrush}" /></Border>
                                         <Border Style="{StaticResource Chip}"><TextBlock Text="原子写入" FontSize="12" Foreground="{StaticResource BrandBrush}" /></Border>
+                                        <Border Style="{StaticResource Chip}"><TextBlock Text="文件浏览" FontSize="12" Foreground="{StaticResource BrandBrush}" /></Border>
                                         <Border Style="{StaticResource Chip}"><TextBlock Text="托盘常驻" FontSize="12" Foreground="{StaticResource BrandBrush}" /></Border>
                                     </WrapPanel>
 
@@ -516,6 +1030,53 @@
                     </Grid>
                 </ScrollViewer>
             </Grid>
+
+            <!-- 轻量消息条：覆盖在页面之上，不占布局，自动淡出 -->
+            <Border x:Name="MessageBar" HorizontalAlignment="Center" VerticalAlignment="Top"
+                    Margin="0,14,0,0" Padding="14,9" CornerRadius="10" MaxWidth="640"
+                    Background="{StaticResource SurfaceBrush}"
+                    BorderBrush="{StaticResource SoftBorderBrush}" BorderThickness="1"
+                    Visibility="Collapsed" Opacity="0" IsHitTestVisible="False">
+                <StackPanel Orientation="Horizontal">
+                    <Path x:Name="MessageIconPath" Width="12" Height="12" Margin="0,0,8,0"
+                          VerticalAlignment="Center" StrokeThickness="1.6"
+                          StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                          StrokeLineJoin="Round"
+                          Stroke="{StaticResource BrandBrush}" />
+                    <TextBlock x:Name="MessageText" FontSize="12" TextWrapping="Wrap" MaxWidth="560"
+                               Foreground="{StaticResource TextPrimaryBrush}" />
+                </StackPanel>
+            </Border>
+
+            <!-- 传输进度：右下角浮动卡片，右侧与下方内容保持同样边距；上传与下载共用 -->
+            <Border x:Name="TransferPanel" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                    Margin="0,0,16,14" Width="320" Padding="14,10" CornerRadius="12"
+                    Background="{StaticResource SurfaceBrush}"
+                    BorderBrush="{StaticResource SoftBorderBrush}" BorderThickness="1"
+                    Visibility="Collapsed" Opacity="0" IsHitTestVisible="False">
+                <StackPanel>
+                    <Grid>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Path x:Name="TransferIconPath" Width="12" Height="12" Margin="0,0,6,0"
+                                  VerticalAlignment="Center" StrokeThickness="1.6"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                  StrokeLineJoin="Round"
+                                  Stroke="{StaticResource BrandBrush}" />
+                            <TextBlock x:Name="TransferTitleText" Text="传输中" FontSize="12"
+                                       FontWeight="SemiBold" VerticalAlignment="Center"
+                                       Foreground="{StaticResource BrandBrush}" />
+                        </StackPanel>
+                        <TextBlock x:Name="TransferCountText" Text="0/0" FontSize="12"
+                                   HorizontalAlignment="Right" VerticalAlignment="Center"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextSecondaryBrush}" />
+                    </Grid>
+
+                    <!-- 每个进行中文件一行：文件名 + 百分比 + 速度 + 细进度条 -->
+                    <ItemsControl x:Name="TransferList" Margin="0,1,0,0"
+                                  ItemTemplate="{StaticResource TransferRowTemplate}" />
+                </StackPanel>
+            </Border>
         </Grid>
     </DockPanel>
 </Window>

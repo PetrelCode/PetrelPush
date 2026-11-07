@@ -17,6 +17,9 @@ public sealed class SyncFatalException : Exception
 /// <summary>远端写入能力（SFTP 实现）。</summary>
 public interface ITransferExecutor : IAsyncDisposable
 {
+    /// <summary>上传字节进度：目标相对路径、已上传字节、文件总字节。</summary>
+    event Action<string, long, long>? UploadProgress;
+
     Task<TransferOutcome> ExecuteAsync(SyncTask task, SyncProfile profile, CancellationToken cancellationToken);
 
     Task TestConnectionAsync(SyncProfile profile, CancellationToken cancellationToken);

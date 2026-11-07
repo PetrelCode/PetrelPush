@@ -11,17 +11,21 @@ internal sealed class HashingUploadStream : Stream
     private readonly IncrementalHash _hash;
     private readonly TokenBucketRateLimiter? _limiter;
     private readonly CancellationToken _cancellationToken;
+    private readonly Action<long>? _progress;
+    private long _transferred;
 
     public HashingUploadStream(
         Stream inner,
         IncrementalHash hash,
         TokenBucketRateLimiter? limiter,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action<long>? progress = null)
     {
         _inner = inner;
         _hash = hash;
         _limiter = limiter;
         _cancellationToken = cancellationToken;
+        _progress = progress;
     }
 
     public override bool CanRead => true;
@@ -46,6 +50,7 @@ internal sealed class HashingUploadStream : Stream
         {
             _hash.AppendData(buffer, offset, read);
             _limiter?.Consume(read);
+            ReportProgress(read);
         }
 
         return read;
@@ -59,6 +64,7 @@ internal sealed class HashingUploadStream : Stream
         {
             _hash.AppendData(buffer, offset, read);
             _limiter?.Consume(read);
+            ReportProgress(read);
         }
 
         return read;
@@ -72,9 +78,16 @@ internal sealed class HashingUploadStream : Stream
         {
             _hash.AppendData(buffer.Span[..read]);
             _limiter?.Consume(read);
+            ReportProgress(read);
         }
 
         return read;
+    }
+
+    private void ReportProgress(int read)
+    {
+        _transferred += read;
+        _progress?.Invoke(_transferred);
     }
 
     public override void Flush()
