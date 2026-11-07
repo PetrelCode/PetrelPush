@@ -268,7 +268,7 @@
                            RenderOptions.BitmapScalingMode="HighQuality" />
                     <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
                         <TextBlock Text="PetrelPush" FontSize="16" FontWeight="Bold" />
-                        <TextBlock x:Name="HeaderVersionText" Text="v0.1.0" FontSize="10"
+                        <TextBlock x:Name="HeaderVersionText" Text="v0.2.0" FontSize="10"
                                    Foreground="{StaticResource TextMutedBrush}" Margin="0,1,0,0" />
                     </StackPanel>
                 </StackPanel>
@@ -949,7 +949,7 @@
                                                 <TextBlock Text="PetrelPush" FontSize="20" FontWeight="Bold" />
                                                 <Border Background="{StaticResource BrandSoftBrush}" CornerRadius="6"
                                                         Padding="7,2" Margin="9,0,0,0" VerticalAlignment="Center">
-                                                    <TextBlock x:Name="AboutVersionText" Text="v0.1.0" FontSize="11"
+                                                    <TextBlock x:Name="AboutVersionText" Text="v0.2.0" FontSize="11"
                                                                FontWeight="SemiBold" Foreground="{StaticResource BrandBrush}" />
                                                 </Border>
                                             </StackPanel>

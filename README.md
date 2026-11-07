@@ -89,10 +89,10 @@ cd PetrelPush
 ### 构建安装包
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File installer\build-msi.ps1 -Version 0.1.0
+powershell -ExecutionPolicy Bypass -File installer\build-msi.ps1 -Version 0.2.0
 ```
 
-输出：`artifacts\PetrelPushSetup-0.1.0-x64.msi`（x64，perMachine 安装到 `C:\Program Files\PetrelPush`）。
+输出：`artifacts\PetrelPushSetup-0.2.0-x64.msi`（x64，perMachine 安装到 `C:\Program Files\PetrelPush`）。
 
 ### 从源码运行
 
