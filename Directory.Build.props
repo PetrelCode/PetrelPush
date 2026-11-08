@@ -7,9 +7,9 @@
     <!-- 本方案仅面向 Windows 客户端，DPAPI 等 Windows-only API 无需跨平台告警 -->
     <NoWarn>$(NoWarn);CA1416</NoWarn>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
-    <Company>PetrelPush</Company>
+    <Company>PetrelCode</Company>
     <Product>PetrelPush</Product>
     <Copyright>Copyright © 2026 PetrelCode</Copyright>
-    <Version>0.2.0</Version>
+    <Version>0.3.0</Version>
   </PropertyGroup>
 </Project>

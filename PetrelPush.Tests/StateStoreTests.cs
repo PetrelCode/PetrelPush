@@ -54,6 +54,22 @@ public sealed class StateStoreTests
     }
 
     [Fact]
+    public async Task ResetClearsEntriesAndTasks()
+    {
+        using var temp = new TempDirectory();
+        await using var store = await OpenAsync(temp);
+
+        await store.CommitScanAsync([Scan("a.txt")], [UploadTask("a.txt")], CancellationToken.None);
+        Assert.Single(await store.LoadEntriesAsync(CancellationToken.None));
+        Assert.Equal(1, await store.CountTasksAsync("pending", CancellationToken.None));
+
+        await store.ResetAsync(CancellationToken.None);
+
+        Assert.Empty(await store.LoadEntriesAsync(CancellationToken.None));
+        Assert.Equal(0, await store.CountTasksAsync("pending", CancellationToken.None));
+    }
+
+    [Fact]
     public async Task LocalDeletionWithoutRemoteStateDropsRow()
     {
         using var temp = new TempDirectory();

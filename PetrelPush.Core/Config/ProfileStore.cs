@@ -102,12 +102,8 @@ public sealed class ProfileStore
 
         if (string.IsNullOrEmpty(secrets.Password) && string.IsNullOrEmpty(secrets.PrivateKeyPassphrase))
         {
-            var existing = GetSecretsPath(profile.ProfileId);
-            if (File.Exists(existing))
-            {
-                File.Delete(existing);
-            }
-
+            // 两个凭据都为空，多半是调用方拿了个「没带凭据的配置副本」来保存。
+            // 这里保留已有的 secrets.bin，避免静默丢掉口令（真清空请卸载或手工删文件）。
             return;
         }
 

@@ -8,10 +8,11 @@
         ShowInTaskbar="False"
         Topmost="True"
         WindowStartupLocation="CenterScreen"
-        Background="#F5F5F7"
+        Background="{StaticResource PageBackgroundBrush}"
         FontFamily="Microsoft YaHei UI, Segoe UI"
         UseLayoutRounding="True"
-        SnapsToDevicePixels="True">
+        SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display">
 
     <Window.Resources>
         <!-- 对应 splash.ts 的 fade-in / fade-up / track-slide 关键帧与延迟 -->
@@ -86,9 +87,9 @@
         <Grid.Background>
             <!-- radial-gradient(120% 110% at 50% 0%, #f9f0ff 0%, #f5f5f7 62%) -->
             <RadialGradientBrush Center="0.5,0" GradientOrigin="0.5,0" RadiusX="1.2" RadiusY="1.1">
-                <GradientStop Color="#F9F0FF" Offset="0" />
-                <GradientStop Color="#F5F5F7" Offset="0.62" />
-                <GradientStop Color="#F5F5F7" Offset="1" />
+                <GradientStop Color="#F6EEFE" Offset="0" />
+                <GradientStop Color="#F7F5FB" Offset="0.62" />
+                <GradientStop Color="#F7F5FB" Offset="1" />
             </RadialGradientBrush>
         </Grid.Background>
 
@@ -98,7 +99,7 @@
                     Margin="20,16,0,0" Opacity="0">
             <Viewbox Width="20" Height="20">
                 <Canvas Width="28" Height="28">
-                    <Border Width="28" Height="28" CornerRadius="8" Background="#9254DE" />
+                    <Border Width="28" Height="28" CornerRadius="8" Background="{StaticResource BrandBrush}" />
                     <Path Stroke="#FFFFFF" StrokeThickness="2"
                           StrokeStartLineCap="Round" StrokeEndLineCap="Round"
                           Data="M7,15 C10,10 13.5,8.5 15,12 C16.5,8.5 20,10 23,15" />
@@ -108,13 +109,13 @@
                 </Canvas>
             </Viewbox>
             <TextBlock Text="PetrelCode" FontSize="13" FontWeight="SemiBold"
-                       Foreground="#1F1F1F" Margin="8,0,0,0" VerticalAlignment="Center" />
+                       Foreground="{StaticResource TextPrimaryBrush}" Margin="8,0,0,0" VerticalAlignment="Center" />
         </StackPanel>
 
         <!-- 中央：产品名 + 版本徽标 -->
         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
             <TextBlock x:Name="NameText" Text="PetrelPush"
-                       FontSize="24" FontWeight="SemiBold" Foreground="#1F1F1F"
+                       FontSize="24" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}"
                        HorizontalAlignment="Center" Opacity="0">
                 <TextBlock.RenderTransform>
                     <TranslateTransform x:Name="NameTransform" Y="6" />
@@ -122,21 +123,21 @@
             </TextBlock>
 
             <Border x:Name="EditionBorder"
-                    Background="#F9F0FF" BorderBrush="#2E9254DE" BorderThickness="1"
-                    CornerRadius="999" Padding="8,1" Margin="0,8,0,0"
+                    Background="{StaticResource BrandSoftBrush}" BorderBrush="{StaticResource BrandBorderBrush}"
+                    BorderThickness="1" Height="22" CornerRadius="11" Padding="9,0" Margin="0,8,0,0"
                     HorizontalAlignment="Center" Opacity="0">
                 <Border.RenderTransform>
                     <TranslateTransform x:Name="EditionTransform" Y="6" />
                 </Border.RenderTransform>
-                <TextBlock x:Name="VersionBadge" Text="v0.2.0"
-                           FontSize="11" FontWeight="SemiBold" Foreground="#9254DE" />
+                <TextBlock x:Name="VersionBadge" Text="v0.3.0"
+                           FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource BrandBrush}" />
             </Border>
         </StackPanel>
 
         <!-- 底部：进度条 + 提示 -->
         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,24">
             <Border x:Name="TrackBorder" Width="168" Height="4" CornerRadius="2"
-                    Background="#F0F0F0" ClipToBounds="True" Opacity="0">
+                    Background="{StaticResource TrackBrush}" ClipToBounds="True" Opacity="0">
                 <Border Width="70.56" Height="4" CornerRadius="2" HorizontalAlignment="Left">
                     <Border.Background>
                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
@@ -151,7 +152,7 @@
             </Border>
 
             <TextBlock x:Name="HintText" Text="正在启动…"
-                       FontSize="12" Foreground="#8C8C8C"
+                       FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"
                        HorizontalAlignment="Center" Margin="0,12,0,0" Opacity="0" />
         </StackPanel>
     </Grid>

@@ -79,6 +79,12 @@ public partial class MainWindow : Window
     /// <summary>消息条令牌：连续消息时让旧的隐藏定时器失效。</summary>
     private int _messageToken;
 
+    /// <summary>设置页回填控件时屏蔽变更回调，避免把读回的值再写一遍注册表。</summary>
+    private bool _suppressAutoStartChange;
+
+    /// <summary>设置页回填「本地终端」下拉框时屏蔽变更回调。</summary>
+    private bool _suppressLocalTerminalChange;
+
     private static readonly Geometry CheckIcon = Freeze(Geometry.Parse("M2,6.5 L5,9.5 L10,3.5"));
 
     private static readonly Geometry AlertIcon = Freeze(Geometry.Parse("M6,2 V7.2 M6,10.2 V10.3"));
@@ -147,6 +153,10 @@ public partial class MainWindow : Window
                 NavLog.IsChecked = true;
                 ShowPage("log");
                 break;
+            case "settings":
+                NavSettings.IsChecked = true;
+                ShowPage("settings");
+                break;
             case "help":
                 NavHelp.IsChecked = true;
                 ShowPage("help");
@@ -179,6 +189,7 @@ public partial class MainWindow : Window
         PageFiles.Visibility = tag == "files" ? Visibility.Visible : Visibility.Collapsed;
         PageIgnore.Visibility = tag == "ignore" ? Visibility.Visible : Visibility.Collapsed;
         PageLog.Visibility = tag == "log" ? Visibility.Visible : Visibility.Collapsed;
+        PageSettings.Visibility = tag == "settings" ? Visibility.Visible : Visibility.Collapsed;
         PageHelp.Visibility = tag == "help" ? Visibility.Visible : Visibility.Collapsed;
 
         if (tag == "files")
@@ -458,6 +469,7 @@ public partial class MainWindow : Window
         // 右上角只显示状态文字，传输进度统一在右下角面板展示
         PhaseText.Text = text;
         PhaseText.Foreground = (Brush)FindResource(foregroundKey);
+        PhaseDot.Fill = (Brush)FindResource(foregroundKey);
         PhaseBadge.Background = (Brush)FindResource(backgroundKey);
     }
 
@@ -520,20 +532,122 @@ public partial class MainWindow : Window
         DeleteEmptyDirsCheck.IsChecked = profile.Sync.DeleteEmptyDirs;
         FollowSymlinksCheck.IsChecked = profile.Sync.FollowSymlinks;
         DryRunCheck.IsChecked = profile.Sync.DryRun;
-        AutoStartCheck.IsChecked = profile.Sync.AutoStart;
 
+        LoadSettingsUi(profile);
         LoadIgnoreEditor(profile);
     }
 
-    private SyncProfile BuildProfileFromUi()
+    /// <summary>设置页只承载应用级偏好：从 profile 读回控件，并刷新存储路径展示。</summary>
+    private void LoadSettingsUi(SyncProfile profile)
     {
-        var source = _host.Profile;
-        var profile = SyncProfileJson.Parse(SyncProfileJson.Serialize(source));
+        _suppressAutoStartChange = true;
+        try
+        {
+            AutoStartSettingCheck.IsChecked = profile.Sync.AutoStart;
+        }
+        finally
+        {
+            _suppressAutoStartChange = false;
+        }
 
+        SettingsResultText.Text = string.Empty;
+        SettingsProfilePathText.Text = _store.GetProfileDirectory(profile.ProfileId);
+        SettingsLogPathText.Text = _store.GetLogDirectory(profile.ProfileId);
+        LoadLocalTerminalOptions(profile);
+    }
+
+    /// <summary>设置页「本地终端」：枚举本机可用的 shell，并回填已保存的偏好。</summary>
+    private void LoadLocalTerminalOptions(SyncProfile profile)
+    {
+        var saved = LocalShells.NormalizeKey(profile.Sync.LocalTerminal);
+        var missing = false;
+
+        _suppressLocalTerminalChange = true;
+        try
+        {
+            LocalTerminalCombo.Items.Clear();
+            LocalTerminalCombo.Items.Add(new ComboBoxItem
+            {
+                Content = LocalShells.AutoDisplayName,
+                Tag = LocalShells.AutoKey,
+            });
+
+            foreach (var shell in LocalShells.Detect())
+            {
+                LocalTerminalCombo.Items.Add(new ComboBoxItem { Content = shell.Name, Tag = shell.Key });
+            }
+
+            // 本机没有的项不列出来（不可选），直接回落到「自动」并由提示说明
+            var selected = FindLocalTerminalItem(saved);
+            missing = selected is null;
+            if (missing)
+            {
+                selected = FindLocalTerminalItem(LocalShells.AutoKey);
+            }
+
+            LocalTerminalCombo.SelectedItem = selected;
+        }
+        finally
+        {
+            _suppressLocalTerminalChange = false;
+        }
+
+        UpdateLocalTerminalHint(missing ? LocalShells.AutoKey : saved, missing ? saved : null);
+    }
+
+    private ComboBoxItem? FindLocalTerminalItem(string key)
+    {
+        foreach (var item in LocalTerminalCombo.Items)
+        {
+            if (item is ComboBoxItem { Tag: string tag } candidate
+                && string.Equals(tag, key, StringComparison.Ordinal))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// 设置页不再常驻显示终端说明，只在需要用户注意时（所选终端本机缺失、发生回退、
+    /// 外部终端缺失等）给一行提示；正常情况保持空白。
+    /// </summary>
+    /// <param name="key">当前生效的偏好键。</param>
+    /// <param name="missingKey">已配置但本机检测不到的键，非空时说明已回退。</param>
+    private void UpdateLocalTerminalHint(string key, string? missingKey = null)
+    {
+        var launch = LocalShells.DescribeLaunch(key);
+        var message = missingKey is null
+            ? launch
+            : $"本机未检测到「{LocalShells.Describe(missingKey)}」，已回退。{launch}";
+
+        // DescribeLaunch 正常返回「将启动：…」，其余文案都属于需要告知的异常/回退
+        var isNotice = missingKey is not null
+                       || !launch.StartsWith("将启动：", StringComparison.Ordinal)
+                       || launch.Contains("回退", StringComparison.Ordinal);
+
+        LocalTerminalHintText.Text = isNotice ? message : string.Empty;
+        LocalTerminalHintText.Visibility = isNotice ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>以「已保存的配置」为基础做副本，各卡片只覆盖自己那几个字段。</summary>
+    private SyncProfile CloneProfile() => _host.Profile.Clone();
+
+    /// <summary>「基本」卡片：配置名称、本地目录、远端目录。</summary>
+    private SyncProfile BuildBasicProfileFromUi()
+    {
+        var profile = CloneProfile();
         profile.ProfileName = ProfileNameBox.Text.Trim();
         profile.LocalRoot = LocalRootBox.Text.Trim();
         profile.RemoteRoot = RemoteRootBox.Text.Trim();
+        return profile;
+    }
 
+    /// <summary>「远端连接」卡片：主机、端口、用户、认证方式与凭据。</summary>
+    private SyncProfile BuildRemoteProfileFromUi()
+    {
+        var profile = CloneProfile();
         profile.Remote.Host = HostBox.Text.Trim();
         profile.Remote.Port = ReadInt(PortBox, 22);
         profile.Remote.User = UserBox.Text.Trim();
@@ -541,8 +655,22 @@ public partial class MainWindow : Window
         profile.Remote.Auth.PrivateKeyPath = string.IsNullOrWhiteSpace(PrivateKeyBox.Text)
             ? null
             : PrivateKeyBox.Text.Trim();
-        profile.Remote.Password = PasswordInput.Password;
-        profile.Remote.Auth.PrivateKeyPassphrase = source.Remote.Auth.PrivateKeyPassphrase;
+
+        // 口令框留空表示沿用已保存的凭据，避免把 secrets.bin 清空
+        var typedPassword = PasswordInput.Password;
+        if (!string.IsNullOrEmpty(typedPassword))
+        {
+            profile.Remote.Password = typedPassword;
+        }
+
+        return profile;
+    }
+
+    /// <summary>「设置 · 同步参数」卡片：去抖、轮询、并发、限速、空目录等。</summary>
+    private SyncProfile BuildSyncProfileFromUi()
+    {
+        var source = _host.Profile;
+        var profile = CloneProfile();
 
         profile.Sync.DebounceMs = Math.Max(0, ReadInt(DebounceBox, 500));
         profile.Sync.MaxForceTriggerMs = Math.Max(profile.Sync.DebounceMs, ReadInt(MaxForceBox, 5000));
@@ -560,9 +688,72 @@ public partial class MainWindow : Window
         profile.Sync.DeleteEmptyDirs = DeleteEmptyDirsCheck.IsChecked == true;
         profile.Sync.FollowSymlinks = FollowSymlinksCheck.IsChecked == true;
         profile.Sync.DryRun = DryRunCheck.IsChecked == true;
-        profile.Sync.AutoStart = AutoStartCheck.IsChecked == true;
+
+        // 开机自启在「设置」页即时保存，这里沿用源 profile 的值，避免保存时被覆盖
+        profile.Sync.AutoStart = source.Sync.AutoStart;
 
         return profile;
+    }
+
+    /// <summary>「基本」卡片校验：只看配置名称、本地目录、远端目录。</summary>
+    private static List<string> ValidateBasicCard(SyncProfile profile)
+    {
+        var errors = new List<string>();
+
+        if (string.IsNullOrWhiteSpace(profile.LocalRoot))
+        {
+            errors.Add("请填写本地目录");
+        }
+        else if (!Directory.Exists(profile.LocalRoot))
+        {
+            errors.Add($"本地目录不存在：{profile.LocalRoot}");
+        }
+
+        if (!(profile.RemoteRoot ?? string.Empty).StartsWith('/'))
+        {
+            errors.Add("远端目录必须是绝对路径（以 / 开头）");
+        }
+
+        return errors;
+    }
+
+    /// <summary>「远端连接」卡片校验：只看主机、端口、用户与凭据。</summary>
+    private static List<string> ValidateRemoteCard(SyncProfile profile)
+    {
+        var errors = new List<string>();
+
+        if (string.IsNullOrWhiteSpace(profile.Remote.Host))
+        {
+            errors.Add("请填写主机");
+        }
+
+        if (profile.Remote.Port is < 1 or > 65535)
+        {
+            errors.Add("端口必须在 1~65535 之间");
+        }
+
+        if (string.IsNullOrWhiteSpace(profile.Remote.User))
+        {
+            errors.Add("请填写用户名");
+        }
+
+        if (string.Equals(profile.Remote.Auth.Type, "key", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.IsNullOrWhiteSpace(profile.Remote.Auth.PrivateKeyPath))
+            {
+                errors.Add("密钥认证需要填写私钥路径");
+            }
+            else if (!File.Exists(profile.Remote.Auth.PrivateKeyPath))
+            {
+                errors.Add($"私钥文件不存在：{profile.Remote.Auth.PrivateKeyPath}");
+            }
+        }
+        else if (string.IsNullOrEmpty(profile.Remote.Password))
+        {
+            errors.Add("密码认证需要填写密码");
+        }
+
+        return errors;
     }
 
     private void LoadIgnoreEditor(SyncProfile profile)
@@ -1018,7 +1209,86 @@ public partial class MainWindow : Window
         var ready = TryResolveLocalDirectory(out _);
         LocalOpenExplorerMenuItem.IsEnabled = ready;
         LocalRefreshMenuItem.IsEnabled = ready;
+        LocalTerminalMenuItem.IsEnabled = ready;
+        LocalNewFolderMenuItem.IsEnabled = ready;
+        // 上传依赖远端连接：保持可点，点击时由提示说明原因，比灰掉更清楚
+        LocalUploadMenuItem.IsEnabled = ready;
         LocalDeleteMenuItem.IsEnabled = ready && LocalFileList.SelectedItem is FileBrowserEntry;
+    }
+
+    /// <summary>
+    /// 在本地终端中打开当前目录（选中目录时进入该目录，选中文件时进入其所在目录）。
+    /// 设置页选了 Windows Terminal 这类外部终端时改为独立窗口启动，不走内置终端。
+    /// </summary>
+    private void OnOpenLocalTerminal(object sender, RoutedEventArgs e)
+    {
+        if (!TryResolveLocalDirectory(out var currentDirectory))
+        {
+            ShowMessage("请先在「配置」页设置有效的本地目录", isError: true);
+            return;
+        }
+
+        var directory = currentDirectory;
+        if (LocalFileList.SelectedItem is FileBrowserEntry entry)
+        {
+            var full = Path.Combine(
+                _host.Profile.LocalRoot,
+                entry.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+
+            if (Directory.Exists(full))
+            {
+                directory = full;
+            }
+            else if (File.Exists(full))
+            {
+                directory = Path.GetDirectoryName(full) ?? directory;
+            }
+        }
+
+        var preference = _host.Profile.Sync.LocalTerminal;
+        if (LocalShells.IsExternalKey(preference))
+        {
+            OpenExternalTerminal(preference, directory);
+            return;
+        }
+
+        if (!ConPtySession.IsSupported)
+        {
+            ShowMessage("本地终端需要 Windows 10 1809 或更高版本", isError: true);
+            return;
+        }
+
+        try
+        {
+            var window = TerminalWindow.ForLocal(directory, preference);
+            window.Owner = this;
+            window.Show();
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"打开本地终端失败：{ex.Message}", isError: true);
+        }
+    }
+
+    /// <summary>外部终端（Windows Terminal）：新开独立窗口并落在指定目录。</summary>
+    private void OpenExternalTerminal(string preference, string directory)
+    {
+        var external = LocalShells.ResolveExternal(preference);
+        if (external is null)
+        {
+            ShowMessage("未检测到 Windows Terminal（wt.exe）：请在「设置」页改用内置终端，或安装后重试", isError: true);
+            return;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo(external.Executable, $"-d \"{directory}\"") { UseShellExecute = true });
+            ShowMessage($"已在 {external.Name} 中打开 {directory}");
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"打开 {external.Name} 失败：{ex.Message}", isError: true);
+        }
     }
 
     /// <summary>删除本地条目（移到回收站）；远端对应内容由下一轮同步的 diff 自动删除。</summary>
@@ -1124,6 +1394,91 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>本地侧「上传文件」：把本机文件复制到本地当前目录，随后由同步引擎上传到远端。</summary>
+    private async void OnLocalUploadFiles(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetLocalDirectory(out var targetDirectory))
+        {
+            return;
+        }
+
+        var files = PickFilesToUpload(_localBrowsePath, "选择要上传到本地目录的文件");
+        if (files.Length == 0)
+        {
+            return;
+        }
+
+        var conflicts = CountLocalConflicts(files, targetDirectory);
+        if (conflicts > 0 && !ConfirmOverwrite($"本地目录已存在 {conflicts} 个同名项，继续将覆盖。是否继续？"))
+        {
+            return;
+        }
+
+        ShowMessage("正在复制到本地目录…");
+        try
+        {
+            var copied = await Task.Run(() => CopyIntoLocal(files, targetDirectory));
+            var done = $"已复制 {copied} 个文件到 {targetDirectory}，同步引擎会自动上传";
+            ShowMessage(done);
+            StatusBarText.Text = done;
+            LoadLocalEntries();
+            _host.RequestSync();
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"复制失败：{ex.Message}", isError: true);
+            MessageBox.Show(this, ex.Message, "复制失败", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    /// <summary>本地侧「新建文件夹」：在本地当前目录新建，随后由同步引擎上传到远端。</summary>
+    private void OnLocalNewFolder(object sender, RoutedEventArgs e)
+    {
+        if (!TryResolveLocalDirectory(out var currentDirectory))
+        {
+            ShowMessage("请先在「配置」页设置有效的本地目录", isError: true);
+            return;
+        }
+
+        var relative = ResolveLocalCreateParent();
+        var parentDirectory = relative.Length == 0
+            ? currentDirectory
+            : Path.Combine(_host.Profile.LocalRoot, relative.Replace('/', Path.DirectorySeparatorChar));
+        if (!Directory.Exists(parentDirectory))
+        {
+            ShowMessage($"目标目录不存在：{parentDirectory}", isError: true);
+            return;
+        }
+
+        var dialog = new TextInputWindow("新建文件夹", $"在 {parentDirectory} 下新建文件夹", "新建文件夹")
+        {
+            Owner = this,
+            Validate = name => ValidateNewFolderName(name, parentDirectory, local: true),
+        };
+
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(parentDirectory, dialog.Value));
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"新建文件夹失败：{ex.Message}", isError: true);
+            MessageBox.Show(this, ex.Message, "新建文件夹失败", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var message = $"已创建文件夹 {dialog.Value}，同步引擎会上传到远端";
+        ShowMessage(message);
+        StatusBarText.Text = message;
+        LoadLocalEntries();
+        _host.RequestSync();
+    }
+
     private async void OnRemoteUp(object sender, RoutedEventArgs e)
     {
         if (_remoteBrowsePath.Length == 0)
@@ -1179,6 +1534,97 @@ public partial class MainWindow : Window
     {
         RemoteDownloadMenuItem.IsEnabled =
             _host.CanBrowseRemote && RemoteFileList.SelectedItem is FileBrowserEntry { CanDownload: true };
+        RemoteTerminalMenuItem.IsEnabled = _host.CanBrowseRemote;
+        RemoteUploadMenuItem.IsEnabled = _host.CanBrowseRemote;
+        RemoteNewFolderMenuItem.IsEnabled = _host.CanBrowseRemote;
+        RemoteDeleteMenuItem.IsEnabled =
+            _host.CanBrowseRemote && RemoteFileList.SelectedItem is FileBrowserEntry;
+    }
+
+    /// <summary>在远端终端中打开当前目录（选中目录时进入该目录），并自动 cd 过去。</summary>
+    private void OnOpenRemoteTerminal(object sender, RoutedEventArgs e)
+    {
+        if (!_host.CanBrowseRemote)
+        {
+            ShowMessage(_host.RemoteBrowseHint ?? "远端连接未就绪", isError: true);
+            return;
+        }
+
+        var relative = _remoteBrowsePath;
+        if (RemoteFileList.SelectedItem is FileBrowserEntry { IsDirectory: true } directory)
+        {
+            relative = directory.RelativePath;
+        }
+
+        var absolute = BuildRemoteDisplayPath(_host.Profile.RemoteRoot, relative);
+
+        try
+        {
+            var window = TerminalWindow.ForRemote(_host.Profile, absolute);
+            window.Owner = this;
+            window.Show();
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"打开终端失败：{ex.Message}", isError: true);
+        }
+    }
+
+    /// <summary>远端侧「上传文件」：选择本机文件，直接上传到远端当前目录。</summary>
+    private async void OnRemoteUploadFiles(object sender, RoutedEventArgs e)
+    {
+        if (!_host.CanBrowseRemote)
+        {
+            ShowMessage(_host.RemoteBrowseHint ?? "远端连接未就绪", isError: true);
+            return;
+        }
+
+        var files = PickFilesToUpload(_remoteBrowsePath, "选择要上传的文件（上传到远端当前目录）");
+        if (files.Length == 0)
+        {
+            return;
+        }
+
+        await UploadFilesToRemoteAsync(files, _remoteBrowsePath);
+    }
+
+    /// <summary>远端侧「新建文件夹」：直接在远端当前目录创建，不进入同步队列。</summary>
+    private async void OnRemoteNewFolder(object sender, RoutedEventArgs e)
+    {
+        if (!_host.CanBrowseRemote)
+        {
+            ShowMessage(_host.RemoteBrowseHint ?? "远端连接未就绪", isError: true);
+            return;
+        }
+
+        var parent = ResolveRemoteCreateParent();
+        var parentDisplay = BuildRemoteDisplayPath(_host.Profile.RemoteRoot, parent);
+        var dialog = new TextInputWindow("新建文件夹", $"在 {parentDisplay} 下新建文件夹", "新建文件夹")
+        {
+            Owner = this,
+            Validate = name => ValidateNewFolderName(name, parentDisplay, local: false),
+        };
+
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        var relative = parent.Length == 0 ? dialog.Value : parent + "/" + dialog.Value;
+        try
+        {
+            ShowMessage($"正在创建远端文件夹 {dialog.Value}…");
+            await _host.CreateRemoteDirectoryAsync(relative, CancellationToken.None);
+            var done = $"已创建远端文件夹 {BuildRemoteDisplayPath(_host.Profile.RemoteRoot, relative)}";
+            ShowMessage(done);
+            StatusBarText.Text = done;
+            await LoadRemoteEntriesAsync();
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"新建文件夹失败：{ex.Message}", isError: true);
+            MessageBox.Show(this, ex.Message, "新建文件夹失败", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     private async void OnDownloadSelected(object sender, RoutedEventArgs e)
@@ -1266,6 +1712,61 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// 删除远端条目：直接作用在服务器上，不进回收站，目录会连同内容递归删除。
+    /// 同步方向是「本地 → 远端」，删掉远端不会让引擎自动补传，本地文件再次修改后才会重新上传。
+    /// </summary>
+    private async void OnRemoteDelete(object sender, RoutedEventArgs e)
+    {
+        if (RemoteFileList.SelectedItem is not FileBrowserEntry entry)
+        {
+            ShowMessage("请先在右侧列表选中要删除的远端条目");
+            return;
+        }
+
+        if (!_host.CanBrowseRemote)
+        {
+            ShowMessage(_host.RemoteBrowseHint ?? "远端连接未就绪", isError: true);
+            return;
+        }
+
+        // 符号链接只删链接本身，不能按目录递归
+        var recursive = entry.IsDirectory && !entry.IsSymbolicLink;
+        var kind = recursive ? "文件夹及其全部内容" : "文件";
+        var localHint = LocalPathExists(_host.Profile, entry.RelativePath)
+            ? "\n\n本地仍存在同名项：同步只按本地变更推进，删除远端后引擎不会自动补传，本地文件再次修改后才会重新上传。"
+            : string.Empty;
+
+        var answer = MessageBox.Show(
+            this,
+            $"确定删除远端{kind}「{entry.Name}」吗？\n\n删除直接作用在服务器上，不进回收站，也无法撤销。{localHint}",
+            "PetrelPush — 删除远端",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No);
+        if (answer != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        try
+        {
+            ShowMessage($"正在删除远端 {entry.Name}…");
+            var result = await _host.DeleteRemotePathAsync(entry.RelativePath, recursive, CancellationToken.None);
+            var done = recursive
+                ? $"已删除远端文件夹 {entry.Name}（{result.Files} 个文件、{result.Directories} 个目录）"
+                : $"已删除远端文件 {entry.Name}";
+            ShowMessage(done);
+            StatusBarText.Text = done;
+            await LoadRemoteEntriesAsync();
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"删除失败：{ex.Message}", isError: true);
+            MessageBox.Show(this, ex.Message, "删除失败", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
     // ── 拖拽：左框复制到本地目录，右框直接上传到远端目录 ─────────
 
     private void OnLocalDragOver(object sender, DragEventArgs e)
@@ -1337,11 +1838,53 @@ public partial class MainWindow : Window
             return;
         }
 
-        var existing = RemoteFileList.ItemsSource is IEnumerable<FileBrowserEntry> items
-            ? items.Where(x => !x.IsDirectory).Select(x => x.Name).ToHashSet(StringComparer.Ordinal)
-            : null;
-        var conflicts = existing is null ? 0 : files.Count(file => existing.Contains(Path.GetFileName(file)));
-        if (conflicts > 0 && !ConfirmOverwrite($"远端当前目录已存在 {conflicts} 个同名文件，继续将覆盖。是否继续？"))
+        await UploadFilesToRemoteAsync(files, _remoteBrowsePath);
+    }
+
+    /// <summary>上传用的文件选择框：初始目录尽量落在本地同步目录的对应路径上。</summary>
+    private string[] PickFilesToUpload(string relativePath, string title)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = title,
+            Filter = "所有文件|*.*",
+            Multiselect = true,
+            CheckFileExists = true,
+            InitialDirectory = ResolveUploadInitialDirectory(relativePath),
+        };
+
+        return dialog.ShowDialog(this) == true ? dialog.FileNames : Array.Empty<string>();
+    }
+
+    /// <summary>上传选择框的初始目录：本地同步目录中存在对应路径时用它，否则退回系统「下载」目录。</summary>
+    private string ResolveUploadInitialDirectory(string relativePath)
+    {
+        var root = _host.Profile.LocalRoot;
+        if (!string.IsNullOrWhiteSpace(root))
+        {
+            var candidate = relativePath.Length == 0
+                ? root
+                : Path.Combine(root, relativePath.Replace('/', Path.DirectorySeparatorChar));
+            if (Directory.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return DefaultDownloadDirectory();
+    }
+
+    /// <summary>逐个上传本机文件到远端目录：同名确认 → 逐个上传 → 刷新右侧列表。</summary>
+    private async Task UploadFilesToRemoteAsync(string[] files, string targetRelativePath)
+    {
+        if (!_host.CanBrowseRemote)
+        {
+            ShowMessage(_host.RemoteBrowseHint ?? "远端连接未就绪", isError: true);
+            return;
+        }
+
+        var conflicts = await CountRemoteConflictsAsync(files, targetRelativePath);
+        if (conflicts > 0 && !ConfirmOverwrite($"远端目录已存在 {conflicts} 个同名文件，继续将覆盖。是否继续？"))
         {
             return;
         }
@@ -1353,7 +1896,7 @@ public partial class MainWindow : Window
             {
                 var file = files[i];
                 var name = Path.GetFileName(file);
-                var relative = _remoteBrowsePath.Length == 0 ? name : _remoteBrowsePath + "/" + name;
+                var relative = targetRelativePath.Length == 0 ? name : targetRelativePath + "/" + name;
                 var index = i + 1;
 
                 var progress = new Progress<long>(bytes => StatusBarText.Text =
@@ -1363,7 +1906,7 @@ public partial class MainWindow : Window
                 total += await _host.UploadLocalFileAsync(file, relative, progress, CancellationToken.None);
             }
 
-            var target = BuildRemoteDisplayPath(_host.Profile.RemoteRoot, _remoteBrowsePath);
+            var target = BuildRemoteDisplayPath(_host.Profile.RemoteRoot, targetRelativePath);
             var done = $"已上传 {files.Length} 个文件（{FileBrowserEntry.FormatSize(total)}）到 {target}";
             ShowMessage(done);
             StatusBarText.Text = done;
@@ -1375,6 +1918,82 @@ public partial class MainWindow : Window
             ShowMessage($"上传失败：{ex.Message}", isError: true);
             MessageBox.Show(this, ex.Message, "上传失败", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
+    }
+
+    /// <summary>统计远端目标目录里与本机待传文件同名的条目；列目录失败时按无冲突处理，交给上传阶段报错。</summary>
+    private async Task<int> CountRemoteConflictsAsync(string[] files, string targetRelativePath)
+    {
+        try
+        {
+            var entries = await _host.ListRemoteDirectoryAsync(targetRelativePath, CancellationToken.None);
+            var existing = entries
+                .Where(entry => !entry.IsDirectory)
+                .Select(entry => entry.Name)
+                .ToHashSet(StringComparer.Ordinal);
+            return files.Count(file => existing.Contains(Path.GetFileName(file)));
+        }
+        catch (Exception)
+        {
+            return 0;
+        }
+    }
+
+    /// <summary>新建文件夹的落点：选中文件夹时建在该文件夹内，否则建在当前目录。</summary>
+    private string ResolveLocalCreateParent()
+    {
+        return LocalFileList.SelectedItem is FileBrowserEntry { IsDirectory: true } directory
+            ? directory.RelativePath
+            : _localBrowsePath;
+    }
+
+    /// <summary>远端新建文件夹的落点：选中文件夹时建在该文件夹内，否则建在当前远端目录。</summary>
+    private string ResolveRemoteCreateParent()
+    {
+        return RemoteFileList.SelectedItem is FileBrowserEntry { IsDirectory: true } directory
+            ? directory.RelativePath
+            : _remoteBrowsePath;
+    }
+
+    /// <summary>新建文件夹的名称校验：本地按 Windows 规则，远端按 Linux 规则。</summary>
+    private static string? ValidateNewFolderName(string name, string parent, bool local)
+    {
+        if (name.Length == 0)
+        {
+            return "请输入文件夹名称";
+        }
+
+        if (name is "." or "..")
+        {
+            return "名称不能是 . 或 ..";
+        }
+
+        if (name.IndexOfAny(['/', '\\']) >= 0)
+        {
+            return "名称不能包含 / 或 \\";
+        }
+
+        if (local)
+        {
+            if (name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || name.EndsWith('.') || name.EndsWith(' '))
+            {
+                return "名称包含 Windows 不允许的字符，或以 . / 空格结尾";
+            }
+
+            var target = Path.Combine(parent, name);
+            if (Directory.Exists(target) || File.Exists(target))
+            {
+                return "当前目录已存在同名文件或文件夹";
+            }
+
+            return null;
+        }
+
+        if (name.Any(char.IsControl))
+        {
+            return "名称不能包含控制字符";
+        }
+
+        return null;
     }
 
     private static bool TryGetDropPaths(DragEventArgs e, out string[] paths)
@@ -1591,75 +2210,159 @@ public partial class MainWindow : Window
         PrivateKeyBox.IsEnabled = useKey;
     }
 
+    /// <summary>
+    /// 「远端连接」卡片右上角的「测试连接」：先保存本卡片的连接信息，再测试连接并重建引擎。
+    /// </summary>
     private async void OnTestConnection(object sender, RoutedEventArgs e)
     {
-        var profile = BuildProfileFromUi();
-        var errors = profile.Validate().ToList();
+        var profile = BuildRemoteProfileFromUi();
+        var errors = ValidateRemoteCard(profile);
         if (errors.Count > 0)
         {
-            TestResultText.Foreground = Brushes.Firebrick;
-            TestResultText.Text = string.Join("；", errors);
+            ShowResult(TestResultText, string.Join("；", errors), Brushes.Firebrick);
             return;
         }
 
         if (!ConfirmProtectedRemoteRoot(profile))
         {
-            TestResultText.Foreground = Brushes.DimGray;
-            TestResultText.Text = "已取消（远端根目录位于系统目录）";
+            ShowResult(TestResultText, "已取消（远端根目录位于系统目录）", Brushes.DimGray);
             return;
         }
 
-        TestResultText.Foreground = Brushes.DimGray;
-        TestResultText.Text = "连接中…";
+        ShowResult(TestResultText, "连接中…", Brushes.DimGray);
         try
         {
-            await _host.TestConnectionAsync(profile, PasswordInput.Password);
+            await _host.TestConnectionAsync(profile, null);
             await _host.RestartAsync(profile);
-            TestResultText.Foreground = Brushes.Green;
-            TestResultText.Text = $"连接成功（{DateTime.Now:HH:mm:ss}），配置已保存并生效";
-            LoadProfileToUi();
-            InvalidateFilePage();
+            ShowResult(TestResultText, $"连接成功（{DateTime.Now:HH:mm:ss}），远端连接配置已保存并生效", Brushes.Green);
+            RefreshRemoteCard();
         }
         catch (Exception ex)
         {
-            TestResultText.Foreground = Brushes.Firebrick;
-            TestResultText.Text = ex.Message;
+            ShowResult(TestResultText, ex.Message, Brushes.Firebrick);
             _host.RequestSync();
         }
     }
 
-    private async void OnSaveConfig(object sender, RoutedEventArgs e)
+    /// <summary>「基本」卡片右上角的「保存」：只保存配置名称与两个目录，然后重建引擎。</summary>
+    private async void OnSaveBasicConfig(object sender, RoutedEventArgs e)
     {
-        var profile = BuildProfileFromUi();
-        var errors = profile.Validate().ToList();
+        var profile = BuildBasicProfileFromUi();
+        var errors = ValidateBasicCard(profile);
         if (errors.Count > 0)
         {
-            SaveResultText.Foreground = Brushes.Firebrick;
-            SaveResultText.Text = string.Join("；", errors);
+            ShowResult(BasicSaveResultText, string.Join("；", errors), Brushes.Firebrick);
             return;
         }
 
         if (!ConfirmProtectedRemoteRoot(profile))
         {
-            SaveResultText.Foreground = Brushes.DimGray;
-            SaveResultText.Text = "已取消（远端根目录位于系统目录）";
+            ShowResult(BasicSaveResultText, "已取消（远端根目录位于系统目录）", Brushes.DimGray);
+            return;
+        }
+
+        var previousLocalRoot = _host.Profile.LocalRoot;
+        var previousRemoteRoot = _host.Profile.RemoteRoot;
+        try
+        {
+            // 凭据不属于本卡片，传 null 沿用已保存的口令
+            await _host.SaveAndRestartAsync(profile, null);
+
+            var rootsChanged =
+                !string.Equals(previousLocalRoot, profile.LocalRoot, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(previousRemoteRoot, profile.RemoteRoot, StringComparison.Ordinal);
+            ShowResult(
+                BasicSaveResultText,
+                rootsChanged
+                    ? $"已保存并应用（{DateTime.Now:HH:mm:ss}）；同步目录已变更，历史快照会被清空，本轮将全量上传到新的远端目录"
+                    : $"已保存并应用（{DateTime.Now:HH:mm:ss}）",
+                Brushes.Green);
+            RefreshBasicCard();
+        }
+        catch (Exception ex)
+        {
+            ShowResult(BasicSaveResultText, ex.Message, Brushes.Firebrick);
+        }
+    }
+
+    /// <summary>「设置 · 同步参数」卡片右上角的「应用」：只保存同步参数。</summary>
+    private async void OnSaveConfig(object sender, RoutedEventArgs e)
+    {
+        var profile = BuildSyncProfileFromUi();
+        var errors = profile.Validate().ToList();
+        if (errors.Count > 0)
+        {
+            ShowResult(SettingsSaveResultText, string.Join("；", errors), Brushes.Firebrick);
             return;
         }
 
         try
         {
-            await _host.SaveAndRestartAsync(profile, PasswordInput.Password);
+            await _host.SaveAndRestartAsync(profile, null);
             StartupRegistration.Apply(profile.Sync.AutoStart);
-            SaveResultText.Foreground = Brushes.Green;
-            SaveResultText.Text = $"已保存并应用（{DateTime.Now:HH:mm:ss}）";
-            LoadProfileToUi();
+            ShowResult(SettingsSaveResultText, $"已保存并应用（{DateTime.Now:HH:mm:ss}）", Brushes.Green);
+            RefreshSyncCard();
             InvalidateFilePage();
         }
         catch (Exception ex)
         {
-            SaveResultText.Foreground = Brushes.Firebrick;
-            SaveResultText.Text = ex.Message;
+            ShowResult(SettingsSaveResultText, ex.Message, Brushes.Firebrick);
         }
+    }
+
+    /// <summary>在卡片右上角的结果文本里显示提示。</summary>
+    private static void ShowResult(System.Windows.Controls.TextBlock target, string message, Brush brush)
+    {
+        target.Foreground = brush;
+        target.Text = message;
+    }
+
+    /// <summary>只刷新「基本」卡片，保留其他卡片里未保存的编辑。</summary>
+    private void RefreshBasicCard()
+    {
+        var profile = _host.Profile;
+        ProfileHeader.Text = string.IsNullOrWhiteSpace(profile.ProfileName)
+            ? profile.ProfileId
+            : $"{profile.ProfileName}（{profile.ProfileId}）";
+        ProfileNameBox.Text = profile.ProfileName;
+        LocalRootBox.Text = profile.LocalRoot;
+        RemoteRootBox.Text = profile.RemoteRoot;
+        LoadIgnoreEditor(profile);
+        InvalidateFilePage();
+    }
+
+    /// <summary>只刷新「同步参数」卡片，保留其他卡片里未保存的编辑。</summary>
+    private void RefreshSyncCard()
+    {
+        var profile = _host.Profile;
+        DebounceBox.Text = profile.Sync.DebounceMs.ToString();
+        MaxForceBox.Text = profile.Sync.MaxForceTriggerMs.ToString();
+        PollBox.Text = profile.Sync.PollIntervalSec.ToString();
+        DeepVerifyDaysBox.Text = profile.Sync.DeepVerifyIntervalDays.ToString();
+        ParallelBox.Text = profile.Sync.MaxParallelTransfers.ToString();
+        RateLimitBox.Text = profile.Sync.RateLimitKbps.ToString();
+        LargeFileBox.Text = profile.Sync.LargeFileThresholdMB.ToString();
+        ExecutableSuffixesBox.Text = string.Join(", ", profile.Sync.ExecutableSuffixes ?? Array.Empty<string>());
+        SyncEmptyDirsCheck.IsChecked = profile.Sync.SyncEmptyDirs;
+        DeleteEmptyDirsCheck.IsChecked = profile.Sync.DeleteEmptyDirs;
+        FollowSymlinksCheck.IsChecked = profile.Sync.FollowSymlinks;
+        DryRunCheck.IsChecked = profile.Sync.DryRun;
+    }
+
+    /// <summary>只刷新「远端连接」卡片，保留其他卡片里未保存的编辑。</summary>
+    private void RefreshRemoteCard()
+    {
+        var profile = _host.Profile;
+        HostBox.Text = profile.Remote.Host;
+        PortBox.Text = profile.Remote.Port.ToString();
+        UserBox.Text = profile.Remote.User;
+        AuthTypeCombo.SelectedIndex = string.Equals(profile.Remote.Auth.Type, "key", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+        PrivateKeyBox.Text = profile.Remote.Auth.PrivateKeyPath ?? string.Empty;
+        PasswordInput.Password = profile.Remote.Password ?? string.Empty;
+        FingerprintText.Text = string.IsNullOrWhiteSpace(profile.Remote.HostKeyFingerprint)
+            ? "主机指纹：未确认（首次同步前请点“测试连接”完成确认）"
+            : $"主机指纹：{profile.Remote.HostKeyFingerprint}";
+        InvalidateFilePage();
     }
 
     private void OnSyncNow(object sender, RoutedEventArgs e)
@@ -1782,6 +2485,98 @@ public partial class MainWindow : Window
         _allLogs.Clear();
         _visibleLogs.Clear();
         UpdateEmptyLogHint();
+    }
+
+    /// <summary>设置页：开机自启勾选后立即写注册表并保存到 profile，不依赖「应用」按钮。</summary>
+    private void OnAutoStartChanged(object sender, RoutedEventArgs e)
+    {
+        if (_suppressAutoStartChange)
+        {
+            return;
+        }
+
+        var enabled = AutoStartSettingCheck.IsChecked == true;
+        var profile = _host.Profile;
+        profile.Sync.AutoStart = enabled;
+
+        try
+        {
+            var applied = StartupRegistration.Apply(enabled);
+            _store.Save(profile);
+
+            if (!applied)
+            {
+                SettingsResultText.Foreground = (Brush)FindResource("StateWarningBrush");
+                SettingsResultText.Text = "已保存到配置，但写入注册表被拒绝（可能受组策略限制），登录后可能不会自动启动";
+                return;
+            }
+
+            SettingsResultText.Foreground = (Brush)FindResource("StateSuccessBrush");
+            SettingsResultText.Text = enabled
+                ? $"已开启开机自启（{DateTime.Now:HH:mm:ss} 生效）"
+                : "已关闭开机自启";
+        }
+        catch (Exception ex)
+        {
+            SettingsResultText.Foreground = (Brush)FindResource("StateErrorBrush");
+            SettingsResultText.Text = $"保存开机自启设置失败：{ex.Message}";
+        }
+    }
+
+    /// <summary>设置页：本地终端 shell 选择后立即保存，下次打开终端生效（不影响已打开的窗口）。</summary>
+    private void OnLocalTerminalChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressLocalTerminalChange)
+        {
+            return;
+        }
+
+        if (LocalTerminalCombo.SelectedItem is not ComboBoxItem { Tag: string key })
+        {
+            return;
+        }
+
+        var profile = _host.Profile;
+        profile.Sync.LocalTerminal = key;
+
+        try
+        {
+            _store.Save(profile);
+            SettingsResultText.Foreground = (Brush)FindResource("StateSuccessBrush");
+            SettingsResultText.Text = $"已保存本地终端：{LocalShells.Describe(key)}（下次打开终端生效）";
+        }
+        catch (Exception ex)
+        {
+            SettingsResultText.Foreground = (Brush)FindResource("StateErrorBrush");
+            SettingsResultText.Text = $"保存本地终端设置失败：{ex.Message}";
+        }
+
+        UpdateLocalTerminalHint(key);
+    }
+
+    /// <summary>设置页「打开」按钮：按 Tag 打开 profile 目录或日志目录。</summary>
+    private void OnOpenSettingsDirectory(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string kind })
+        {
+            return;
+        }
+
+        var profileId = _host.Profile.ProfileId;
+        var directory = kind == "logs"
+            ? _store.GetLogDirectory(profileId)
+            : _store.GetProfileDirectory(profileId);
+
+        try
+        {
+            Directory.CreateDirectory(directory);
+            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{directory}\"") { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            SettingsResultText.Foreground = (Brush)FindResource("StateErrorBrush");
+            SettingsResultText.Text = $"打开目录失败：{ex.Message}";
+        }
     }
 
     private void UpdateEmptyLogHint()

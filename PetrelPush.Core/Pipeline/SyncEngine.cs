@@ -98,6 +98,8 @@ public sealed class SyncEngine : IAsyncDisposable
             _logger.Warning(ex, "读取深度校验时间失败");
         }
 
+        await EnsureRootSignatureAsync(cancellationToken).ConfigureAwait(false);
+
         UpdateStatus(EnginePhase.Idle, "启动中…");
         _loop = Task.Run(() => LoopAsync(_cts.Token), CancellationToken.None);
         RequestCycle();
@@ -170,6 +172,7 @@ public sealed class SyncEngine : IAsyncDisposable
     /// <summary>异步手动跑一轮（CLI / UI 手动同步用，与后台周期串行）。</summary>
     public async Task<CycleResult> RunOnceAsync(bool deepVerify, CancellationToken cancellationToken = default)
     {
+        await EnsureRootSignatureAsync(cancellationToken).ConfigureAwait(false);
         var profile = _profileProvider();
         var rules = IgnoreRules.Load(profile.LocalRoot, profile.Sync, _logger);
         _lastRules = rules;
@@ -347,6 +350,65 @@ public sealed class SyncEngine : IAsyncDisposable
         {
             _logger.Debug(ex, "刷新任务计数失败");
         }
+    }
+
+    /// <summary>
+    /// 本地目录或远端根目录变更后，历史快照记录的是「另一个目录的已知态」，
+    /// diff 会误判为“已同步”而不再上传，因此这里检测到变更就清空快照与任务，退回全量同步。
+    /// </summary>
+    private async Task EnsureRootSignatureAsync(CancellationToken cancellationToken)
+    {
+        const string key = "roots_signature";
+
+        string signature;
+        try
+        {
+            signature = BuildRootSignature(_profileProvider());
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning(ex, "同步目录签名计算失败，跳过变更检测");
+            return;
+        }
+
+        try
+        {
+            var saved = await _store.GetMetaAsync(key, cancellationToken).ConfigureAwait(false);
+            if (string.Equals(saved, signature, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(saved))
+            {
+                _logger.Warning("同步目录已变更（{Previous} → {Current}），清空历史快照与任务，按全量重新上传", saved, signature);
+                LogLine?.Invoke("检测到本地 / 远端目录变更，已清空历史快照，本次将全量上传");
+                await _store.ResetAsync(cancellationToken).ConfigureAwait(false);
+                _lastDeepVerifyAt = null;
+            }
+
+            await _store.SetMetaAsync(key, signature, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning(ex, "同步目录变更检测失败，按原快照继续");
+        }
+    }
+
+    /// <summary>目录签名 = 本地绝对路径 + 规范化远端根；不含认证等无关字段，避免误判。</summary>
+    private static string BuildRootSignature(SyncProfile profile)
+    {
+        var local = string.IsNullOrWhiteSpace(profile.LocalRoot)
+            ? string.Empty
+            : PathKeys.Normalize(Path.GetFullPath(profile.LocalRoot));
+
+        var remote = (profile.RemoteRoot ?? string.Empty).TrimEnd('/');
+        if (remote.Length == 0)
+        {
+            remote = "/";
+        }
+
+        return $"{local}|{remote}";
     }
 
     private bool IsDeepVerifyDue(SyncProfile profile, DateTimeOffset now)

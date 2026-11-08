@@ -53,6 +53,9 @@ public sealed class RemoteEntry
 /// <summary>下载完成后的实际结果。</summary>
 public sealed record RemoteDownloadResult(long Size, DateTimeOffset ModifiedAt);
 
+/// <summary>远端删除结果：删掉的文件数与目录数。</summary>
+public sealed record RemoteDeleteResult(int Files, int Directories);
+
 /// <summary>文件页条目的差异状态。</summary>
 public enum FileEntryState
 {

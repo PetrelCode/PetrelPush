@@ -166,6 +166,69 @@ public sealed class SftpTransferExecutor : ITransferExecutor
         }
     }
 
+    /// <summary>
+    /// 在远端创建单个目录（文件页右键「新建文件夹」用，不进入同步队列）。
+    /// 父目录不存在时自动创建，路径仍限制在 remoteRoot 之内。
+    /// </summary>
+    public async Task CreateDirectoryAsync(
+        string relativePath,
+        SyncProfile profile,
+        CancellationToken cancellationToken)
+    {
+        using var lease = await _pool.AcquireAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await Task.Run(
+                () => CreateDirectoryCore(lease.Client, profile, relativePath, cancellationToken),
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (SyncFatalException)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex is SshException or SocketException or IOException or ObjectDisposedException or TimeoutException)
+        {
+            lease.MarkBroken();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// 删除远端的单个文件，或递归删除目录（文件页右键「删除」用，不进入同步队列）。
+    /// 符号链接只删链接本身，不跟随目标；路径仍限制在 remoteRoot 之内。
+    /// </summary>
+    public async Task<RemoteDeleteResult> DeletePathAsync(
+        string relativePath,
+        bool deleteDirectory,
+        SyncProfile profile,
+        CancellationToken cancellationToken)
+    {
+        using var lease = await _pool.AcquireAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await Task.Run(
+                () => DeleteCore(lease.Client, profile, relativePath, deleteDirectory, cancellationToken),
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (SyncFatalException)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex is SshException or SocketException or IOException or ObjectDisposedException or TimeoutException)
+        {
+            lease.MarkBroken();
+            throw;
+        }
+    }
+
     /// <summary>把本地文件直接上传到远端指定相对路径（拖拽上传用，不经过本地同步目录）。</summary>
     public async Task<long> UploadFileAsync(
         string localFilePath,
@@ -310,6 +373,88 @@ public sealed class SftpTransferExecutor : ITransferExecutor
             TryDeleteLocalFile(temporaryPath);
             throw;
         }
+    }
+
+    private void CreateDirectoryCore(
+        SftpClient client,
+        SyncProfile profile,
+        string relativePath,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var remotePath = PathGuard.Combine(profile.RemoteRoot, relativePath);
+        if (client.Exists(remotePath))
+        {
+            throw new IOException($"远端已存在同名文件或目录：{remotePath}");
+        }
+
+        EnsureDirectory(client, remotePath);
+        _logger.Information("已创建远端目录：{Path}", remotePath);
+    }
+
+    private RemoteDeleteResult DeleteCore(
+        SftpClient client,
+        SyncProfile profile,
+        string relativePath,
+        bool deleteDirectory,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var root = PathGuard.NormalizeRemoteRoot(profile.RemoteRoot);
+        var remotePath = PathGuard.Combine(profile.RemoteRoot, relativePath);
+        if (string.Equals(remotePath, root, StringComparison.Ordinal))
+        {
+            throw new IOException("不允许删除远端根目录");
+        }
+
+        var attributes = client.GetAttributes(remotePath);
+        if (!deleteDirectory || !attributes.IsDirectory || attributes.IsSymbolicLink)
+        {
+            client.DeleteFile(remotePath);
+            _logger.Information("已删除远端文件：{Path}", remotePath);
+            return new RemoteDeleteResult(1, 0);
+        }
+
+        var files = 0;
+        var directories = 0;
+        DeleteTree(client, remotePath, cancellationToken, ref files, ref directories);
+        _logger.Information("已删除远端目录：{Path}（{Files} 个文件、{Directories} 个目录）", remotePath, files, directories);
+        return new RemoteDeleteResult(files, directories);
+    }
+
+    /// <summary>先删子项再删自身；符号链接（含指向目录的链接）只删链接本身，不跟随目标。</summary>
+    private static void DeleteTree(
+        SftpClient client,
+        string directory,
+        CancellationToken cancellationToken,
+        ref int files,
+        ref int directories)
+    {
+        foreach (var file in client.ListDirectory(directory))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (file.Name is "." or "..")
+            {
+                continue;
+            }
+
+            var child = directory.TrimEnd('/') + "/" + file.Name;
+            var isDirectory = file.Attributes?.IsDirectory ?? file.IsDirectory;
+            var isSymbolicLink = file.Attributes?.IsSymbolicLink ?? file.IsSymbolicLink;
+            if (isDirectory && !isSymbolicLink)
+            {
+                DeleteTree(client, child, cancellationToken, ref files, ref directories);
+                continue;
+            }
+
+            client.DeleteFile(child);
+            files++;
+        }
+
+        client.DeleteDirectory(directory);
+        directories++;
     }
 
     private long UploadCore(

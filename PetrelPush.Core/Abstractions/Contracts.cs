@@ -62,6 +62,9 @@ public interface IStateStore : IAsyncDisposable
 
     Task ResetFailedTasksAsync(CancellationToken cancellationToken);
 
+    /// <summary>清空快照与任务队列（本地 / 远端目录变更后重建全量同步用）。</summary>
+    Task ResetAsync(CancellationToken cancellationToken);
+
     Task<int> CountTasksAsync(string state, CancellationToken cancellationToken);
 
     Task<string?> GetMetaAsync(string key, CancellationToken cancellationToken);

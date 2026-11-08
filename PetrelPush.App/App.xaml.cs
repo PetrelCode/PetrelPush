@@ -103,7 +103,7 @@ public partial class App : Application
         base.OnExit(e);
     }
 
-    /// <summary>支持 --page status|config|ignore|log|help|about 直接打开指定页面。</summary>
+    /// <summary>支持 --page status|config|files|ignore|log|settings|help|about 直接打开指定页面。</summary>
     private static string ReadInitialPage(string[] args)
     {
         for (var i = 0; i < args.Length - 1; i++)

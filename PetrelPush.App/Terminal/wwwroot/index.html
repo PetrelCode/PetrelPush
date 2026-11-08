@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PetrelPush Terminal</title>
+  <link rel="stylesheet" href="xterm.css">
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+      background: #1B1B26;
+    }
+
+    #terminal {
+      position: absolute;
+      inset: 0;
+      padding: 8px 4px 8px 10px;
+    }
+
+    .xterm-viewport {
+      background-color: #1B1B26 !important;
+      scrollbar-width: thin;
+    }
+
+    .xterm-viewport::-webkit-scrollbar {
+      width: 10px;
+    }
+
+    .xterm-viewport::-webkit-scrollbar-thumb {
+      background: #3B3550;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div id="terminal"></div>
+  <script src="xterm.js"></script>
+  <script src="addon-fit.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

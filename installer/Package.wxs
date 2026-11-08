@@ -9,7 +9,7 @@
     以及各用户的开机自启注册表项；MajorUpgrade 升级过程中的旧版本卸载不清理，保证配置延续。
   -->
   <Package Name="PetrelPush"
-           Manufacturer="PetrelPush"
+           Manufacturer="PetrelCode"
            Version="$(var.ProductVersion)"
            UpgradeCode="{8F3C2A41-7B6D-4E52-9C18-5D0A2B7E4F61}"
            Language="2052"

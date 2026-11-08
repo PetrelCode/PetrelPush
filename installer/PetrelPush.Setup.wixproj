@@ -10,7 +10,14 @@
     <AppPublishDir>$(MSBuildThisFileDirectory)..\artifacts\publish\</AppPublishDir>
 
     <!-- MSI 产品版本（x.y.z），可由 build-msi.ps1 -Version 覆盖 -->
-    <ProductVersion Condition="'$(ProductVersion)' == ''">0.2.0</ProductVersion>
+    <ProductVersion Condition="'$(ProductVersion)' == ''">0.3.0</ProductVersion>
+
+    <!--
+      安装向导语言：选用 WixUI 扩展自带的中文本地化（zh-CN）字符串。
+      未指定时 WiX 默认使用 en-US，安装界面全部为英文。
+      这里没有额外的 .wxl 文件，故输出路径仍是 bin\x64\<配置>\PetrelPushSetup.msi。
+    -->
+    <Cultures>zh-CN</Cultures>
     <DefineConstants>AppPublishDir=$(AppPublishDir);ProductVersion=$(ProductVersion)</DefineConstants>
 
     <!--

@@ -27,6 +27,9 @@ public sealed class FileBrowserEntry
     /// <summary>是否可进入（目录，且不是符号链接目录）。</summary>
     public bool CanEnter { get; private init; }
 
+    /// <summary>符号链接（远端删除时只删链接本身，不递归目标）。</summary>
+    public bool IsSymbolicLink { get; private init; }
+
     /// <summary>是否可下载（远端普通文件）。</summary>
     public bool CanDownload { get; private init; }
 
@@ -68,6 +71,7 @@ public sealed class FileBrowserEntry
             RelativePath = relativePath,
             IsDirectory = isDirectory,
             CanEnter = isDirectory && !isSymbolicLink,
+            IsSymbolicLink = isSymbolicLink,
             CanDownload = false,
             Icon = isDirectory ? FileIcons.FolderIcon : FileIcons.ForFile(name),
             SizeText = sizeText,
@@ -90,6 +94,7 @@ public sealed class FileBrowserEntry
             RelativePath = entry.RelativePath,
             IsDirectory = entry.IsDirectory,
             CanEnter = entry.CanEnter,
+            IsSymbolicLink = entry.IsSymbolicLink,
             CanDownload = entry.CanDownload,
             Icon = entry.IsDirectory ? FileIcons.FolderIcon : FileIcons.ForFile(entry.Name),
             SizeText = sizeText,

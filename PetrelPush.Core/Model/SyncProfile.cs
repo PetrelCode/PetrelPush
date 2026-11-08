@@ -112,6 +112,19 @@ public sealed class SyncProfile
             yield return "retry.baseDelayMs / maxDelayMs 参数不合法";
         }
     }
+
+    /// <summary>
+    /// 深拷贝配置（改单个卡片时以“已保存的配置”为底稿）。
+    /// JSON 往返会丢掉 [JsonIgnore] 的凭据，所以密码与私钥口令要单独从当前对象补回，
+    /// 否则副本拿去 Save 时会把 secrets.bin 清空。
+    /// </summary>
+    public SyncProfile Clone()
+    {
+        var clone = SyncProfileJson.Parse(SyncProfileJson.Serialize(this));
+        clone.Remote.Password = Remote.Password;
+        clone.Remote.Auth.PrivateKeyPassphrase = Remote.Auth.PrivateKeyPassphrase;
+        return clone;
+    }
 }
 
 public sealed class RemoteOptions
@@ -175,6 +188,12 @@ public sealed class SyncOptions
     public int LargeFileThresholdMB { get; set; } = 100;
 
     public bool AutoStart { get; set; } = true;
+
+    /// <summary>
+    /// 文件页「在终端中打开」使用的本地 shell：auto（默认优先级）/ pwsh / powershell / cmd / git-bash / wsl。
+    /// 偏好不存在时回退到自动优先级；与远端 SSH 终端无关。
+    /// </summary>
+    public string LocalTerminal { get; set; } = "auto";
 
     public bool PausedOnMeteredNetwork { get; set; } = true;
 

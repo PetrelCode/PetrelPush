@@ -171,6 +171,25 @@ public sealed class SyncHost : IAsyncDisposable
             .ConfigureAwait(true);
     }
 
+    /// <summary>删除远端文件，或递归删除远端目录（文件页右键用，不进入同步队列）。</summary>
+    public async Task<RemoteDeleteResult> DeleteRemotePathAsync(
+        string relativePath,
+        bool deleteDirectory,
+        CancellationToken cancellationToken)
+    {
+        var browser = RequireBrowser();
+        return await browser
+            .DeletePathAsync(relativePath, deleteDirectory, _profile, cancellationToken)
+            .ConfigureAwait(true);
+    }
+
+    /// <summary>在远端当前目录下新建文件夹（文件页右键用，不进入同步队列）。</summary>
+    public async Task CreateRemoteDirectoryAsync(string relativePath, CancellationToken cancellationToken)
+    {
+        var browser = RequireBrowser();
+        await browser.CreateDirectoryAsync(relativePath, _profile, cancellationToken).ConfigureAwait(true);
+    }
+
     /// <summary>把本地文件直接上传到远端指定相对路径（拖拽上传，不进入同步队列）。</summary>
     public async Task<long> UploadLocalFileAsync(
         string localFilePath,

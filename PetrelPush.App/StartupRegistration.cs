@@ -9,7 +9,8 @@ public static class StartupRegistration
     private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string ValueName = "PetrelPush";
 
-    public static void Apply(bool enabled)
+    /// <summary>写入或删除登录项；返回是否真的写成功（组策略或权限限制时为 false）。</summary>
+    public static bool Apply(bool enabled)
     {
         try
         {
@@ -17,25 +18,28 @@ public static class StartupRegistration
                             ?? Registry.CurrentUser.CreateSubKey(RunKeyPath);
             if (key is null)
             {
-                return;
+                return false;
             }
 
-            if (enabled)
-            {
-                var executable = Environment.ProcessPath;
-                if (!string.IsNullOrEmpty(executable))
-                {
-                    key.SetValue(ValueName, $"\"{executable}\"");
-                }
-            }
-            else
+            if (!enabled)
             {
                 key.DeleteValue(ValueName, throwOnMissingValue: false);
+                return true;
             }
+
+            var executable = Environment.ProcessPath;
+            if (string.IsNullOrEmpty(executable))
+            {
+                return false;
+            }
+
+            key.SetValue(ValueName, $"\"{executable}\"");
+            return true;
         }
         catch (Exception)
         {
             // 组策略或权限限制时忽略，不影响同步功能
+            return false;
         }
     }
 }

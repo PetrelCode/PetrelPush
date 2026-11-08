@@ -455,6 +455,36 @@ public sealed class SqliteStateStore : IStateStore
             ("$now", Iso(DateTimeOffset.UtcNow))).ConfigureAwait(false);
     }
 
+    public async Task ResetAsync(CancellationToken cancellationToken)
+    {
+        await _writeGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await using var connection = await OpenAsync(cancellationToken).ConfigureAwait(false);
+            await using var transaction = connection.BeginTransaction();
+
+            await using (var clearTasks = connection.CreateCommand())
+            {
+                clearTasks.Transaction = transaction;
+                clearTasks.CommandText = "DELETE FROM sync_task;";
+                await clearTasks.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            await using (var clearEntries = connection.CreateCommand())
+            {
+                clearEntries.Transaction = transaction;
+                clearEntries.CommandText = "DELETE FROM file_entry;";
+                await clearEntries.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _writeGate.Release();
+        }
+    }
+
     public async Task<int> CountTasksAsync(string state, CancellationToken cancellationToken)
     {
         await using var connection = await OpenAsync(cancellationToken).ConfigureAwait(false);
