@@ -41,16 +41,29 @@ public partial class MainWindow : Window
         desktop.ini
         """;
 
-    private readonly SyncHost _host;
+    /// <summary>当前选中的连接（切换连接时整体替换，事件订阅成对解绑 / 绑定）。</summary>
+    private SyncHost _host;
+
+    private readonly ConnectionManager _connections;
     private readonly ProfileStore _store;
     private readonly TrayIcon _tray;
     private readonly ObservableCollection<LogEntry> _visibleLogs = new();
     private readonly List<LogEntry> _allLogs = new();
 
+    /// <summary>配置页当前展示的连接行，用于状态变化时就地刷新行内标签（不重建列表）。</summary>
+    private List<ConnectionRow> _connectionRows = new();
+
     private static readonly IReadOnlyDictionary<string, FileEntry> EmptySnapshot =
         new Dictionary<string, FileEntry>(StringComparer.Ordinal);
 
     private LogEventLevel _minLevel = LogEventLevel.Verbose;
+
+    /// <summary>日志页的连接筛选：null 表示全部，「应用」表示应用自身日志，其余为连接名。</summary>
+    private string? _connectionFilter;
+
+    /// <summary>重建连接下拉框时屏蔽变更回调。</summary>
+    private bool _suppressConnectionFilter;
+
     private bool _allowClose;
 
     // 文件页状态：两侧各自维护相对同步根的路径
@@ -85,6 +98,9 @@ public partial class MainWindow : Window
     /// <summary>设置页回填「本地终端」下拉框时屏蔽变更回调。</summary>
     private bool _suppressLocalTerminalChange;
 
+    /// <summary>回填连接下拉框 / 启用勾选时屏蔽变更回调，避免程序化赋值触发切换或启停。</summary>
+    private bool _suppressConnectionChange;
+
     private static readonly Geometry CheckIcon = Freeze(Geometry.Parse("M2,6.5 L5,9.5 L10,3.5"));
 
     private static readonly Geometry AlertIcon = Freeze(Geometry.Parse("M6,2 V7.2 M6,10.2 V10.3"));
@@ -101,11 +117,20 @@ public partial class MainWindow : Window
         return geometry;
     }
 
-    public MainWindow(SyncHost host, ProfileStore store, TrayIcon tray, UiLogSink sink, string initialPage = "status")
+    public MainWindow(
+        ConnectionManager connections,
+        ProfileStore store,
+        TrayIcon tray,
+        UiLogSink sink,
+        string initialPage = "status")
     {
         InitializeComponent();
 
-        _host = host;
+        // 顶栏是深色渐变，标题栏也跟着切成深色
+        SourceInitialized += (_, _) => DarkTitleBar.Apply(this);
+
+        _connections = connections;
+        _host = connections.Current;
         _store = store;
         _tray = tray;
 
@@ -113,9 +138,9 @@ public partial class MainWindow : Window
         LogList.ItemsSource = _visibleLogs;
         TransferList.ItemsSource = _transferRows;
 
-        _host.StatusChanged += OnStatusChanged;
-        _host.Progress += OnProgress;
-        _host.TransferProgress += OnTransferProgress;
+        AttachHost(_host);
+        _connections.Changed += OnConnectionsChanged;
+        _connections.StateChanged += OnConnectionsStateChanged;
         sink.LogEmitted += OnLogEmitted;
 
         Closing += OnClosing;
@@ -127,10 +152,344 @@ public partial class MainWindow : Window
         AboutOsText.Text = $"Windows · {(Environment.Is64BitOperatingSystem ? "x64" : "x86")}";
         AboutRuntimeText.Text = $".NET {Environment.Version}（自包含）";
 
+        RefreshConnectionList();
         LoadProfileToUi();
         ApplyStatus(_host.Status);
         UpdateEmptyLogHint();
         ApplyInitialPage(initialPage);
+    }
+
+    /// <summary>绑定当前连接的事件（切换连接时与 <see cref="DetachHost"/> 成对调用）。</summary>
+    private void AttachHost(SyncHost host)
+    {
+        host.StatusChanged += OnStatusChanged;
+        host.Progress += OnProgress;
+        host.TransferProgress += OnTransferProgress;
+    }
+
+    private void DetachHost(SyncHost host)
+    {
+        host.StatusChanged -= OnStatusChanged;
+        host.Progress -= OnProgress;
+        host.TransferProgress -= OnTransferProgress;
+    }
+
+    /// <summary>连接列表 / 启用状态变化后刷新下拉框与勾选（可能来自后台线程）。</summary>
+    private void OnConnectionsChanged(object? sender, EventArgs e)
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(new Action(() => OnConnectionsChanged(sender, e)));
+            return;
+        }
+
+        RefreshConnectionList();
+    }
+
+    /// <summary>
+    /// 任一连接的状态变化：只让行内状态标签重新取值，不重建列表——
+    /// 重建会丢掉当前选中项并让滚动位置跳动。
+    /// </summary>
+    private void OnConnectionsStateChanged(object? sender, EventArgs e)
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(new Action(() => OnConnectionsStateChanged(sender, e)));
+            return;
+        }
+
+        foreach (var row in _connectionRows)
+        {
+            row.Refresh();
+        }
+    }
+
+    /// <summary>连接列表：每行一条连接，当前连接与启用状态一目了然。</summary>
+    private void RefreshConnectionList()
+    {
+        var currentId = _host.Profile.ProfileId;
+
+        _suppressConnectionChange = true;
+        try
+        {
+            var rows = _connections.Hosts.Select(host => new ConnectionRow(host)).ToList();
+            _connectionRows = rows;
+            ConnectionListBox.ItemsSource = rows;
+            ConnectionListBox.SelectedItem = rows.FirstOrDefault(
+                                                   row => string.Equals(row.Host.Profile.ProfileId, currentId, StringComparison.Ordinal))
+                                               ?? rows.FirstOrDefault();
+        }
+        finally
+        {
+            _suppressConnectionChange = false;
+        }
+
+        ConnectionEmptyHint.Visibility = _connections.Hosts.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        UpdateConnectionUi();
+        RefreshLogConnectionOptions();
+    }
+
+    /// <summary>状态页与配置页头部的连接计数（只更新文本，不碰勾选状态）。</summary>
+    private void UpdateConnectionUi()
+    {
+        ConnectionsSummaryText.Text = $"共 {_connections.Hosts.Count} 条连接，{_connections.EnabledCount} 条启用";
+        ConnectionCountText.Text = $"共 {_connections.Hosts.Count} 条 · 启用 {_connections.EnabledCount} 条";
+    }
+
+    private void OnConnectionSelected(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressConnectionChange || ConnectionListBox.SelectedItem is not ConnectionRow row)
+        {
+            return;
+        }
+
+        SwitchConnection(row.Host);
+    }
+
+    /// <summary>切换当前连接：解绑旧宿主事件、换上新宿主并重载各页面状态。</summary>
+    private void SwitchConnection(SyncHost host)
+    {
+        if (!ReferenceEquals(host, _host))
+        {
+            DetachHost(_host);
+            _host = host;
+            _connections.Select(host);
+            AttachHost(host);
+        }
+
+        ReloadCurrentConnection();
+
+        // 若正停留在文件页 / 忽略页，立即按新连接重新加载
+        if (PageFiles.Visibility == Visibility.Visible)
+        {
+            OnFilesPageShown();
+        }
+        else if (PageIgnore.Visibility == Visibility.Visible)
+        {
+            LoadIgnoreEditor(host.Profile);
+        }
+    }
+
+    /// <summary>按当前宿主重新加载界面（切换连接，或在弹窗里保存 / 测试连接后调用）。</summary>
+    private void ReloadCurrentConnection()
+    {
+        LoadProfileToUi();
+        ApplyStatus(_host.Status);
+        SetStatusHint(_host.Status.LastError);
+        ApplyPauseButton();
+
+        // 文件页属于单连接状态：路径、快照与远端缓存全部从头来
+        _localBrowsePath = string.Empty;
+        InvalidateFilePage();
+        UpdateConnectionUi();
+    }
+
+    /// <summary>列表行上的「启用」勾选：逐条启停，不需要先切换当前连接。</summary>
+    private async void OnConnectionRowEnabledClick(object sender, RoutedEventArgs e)
+    {
+        if (_suppressConnectionChange || sender is not CheckBox { Tag: ConnectionRow row } checkBox)
+        {
+            return;
+        }
+
+        var enabled = checkBox.IsChecked == true;
+        if (enabled == row.Host.Profile.Enabled)
+        {
+            return;
+        }
+
+        try
+        {
+            await _connections.SetEnabledAsync(row.Host, enabled);
+            ShowResult(
+                ConnectionResultText,
+                enabled
+                    ? $"已启用「{row.Host.DisplayName}」，同步引擎已启动"
+                    : $"已禁用「{row.Host.DisplayName}」，同步引擎已停止",
+                enabled ? ResultSuccess : ResultIdle);
+        }
+        catch (Exception ex)
+        {
+            ShowResult(ConnectionResultText, $"「{row.Host.DisplayName}」{ex.Message}", ResultError);
+        }
+
+        RefreshConnectionList();
+        ApplyStatus(_host.Status);
+    }
+
+    private async void OnNewConnection(object sender, RoutedEventArgs e)
+    {
+        var host = _connections.Create();
+        SwitchConnection(host);
+        RefreshConnectionList();
+        await OpenConnectionEditorAsync(host);
+    }
+
+    private async void OnEditConnection(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: ConnectionRow row })
+        {
+            return;
+        }
+
+        SwitchConnection(row.Host);
+        RefreshConnectionList();
+        await OpenConnectionEditorAsync(row.Host);
+    }
+
+    /// <summary>列表行的「同步参数」：弹出独立的同步参数窗口，只改该连接的 sync 段。</summary>
+    private void OnEditSyncOptions(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: ConnectionRow row })
+        {
+            return;
+        }
+
+        var editor = new SyncOptionsWindow(row.Host) { Owner = this };
+        if (editor.ShowDialog() == true && editor.Saved)
+        {
+            ShowResult(
+                ConnectionResultText,
+                $"「{row.Host.DisplayName}」同步参数已保存并应用",
+                ResultSuccess);
+
+            if (ReferenceEquals(row.Host, _host))
+            {
+                ApplyStatus(_host.Status);
+            }
+        }
+
+        RefreshConnectionList();
+    }
+
+    /// <summary>打开连接配置弹窗：保存后刷新列表；取消则丢弃尚未落盘的空白连接。</summary>
+    private async Task OpenConnectionEditorAsync(SyncHost host)
+    {
+        var editor = new ConnectionEditorWindow(host, _store, Serilog.Log.Logger) { Owner = this };
+        editor.ShowDialog();
+
+        if (editor.Saved)
+        {
+            ShowResult(ConnectionResultText, $"「{host.DisplayName}」配置已保存", ResultSuccess);
+        }
+        else if (!editor.Persisted)
+        {
+            // 新建后直接取消：这条连接从未落盘，直接丢掉，避免留下空白项
+            await _connections.DiscardAsync(host);
+            ShowResult(ConnectionResultText, "已取消：未保存的新连接已丢弃", ResultIdle);
+        }
+
+        // 配置确实写盘了才记一条「新建连接」：仅打开弹窗、点测试连接而没保存的不算
+        _connections.NotifyProfilePersisted(host);
+
+        _connections.NotifyProfilesChanged();
+        SwitchConnection(_connections.Current);
+        RefreshConnectionList();
+    }
+
+    private async void OnDeleteConnection(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: ConnectionRow row })
+        {
+            return;
+        }
+
+        if (_connections.Hosts.Count <= 1)
+        {
+            ShowResult(ConnectionResultText, "至少需要保留一条连接", ResultError);
+            return;
+        }
+
+        var host = row.Host;
+        var answer = MessageBox.Show(
+            this,
+            $"删除连接「{host.DisplayName}」？{Environment.NewLine}{Environment.NewLine}"
+            + "该连接的配置、凭据、同步快照与日志目录都会被删除，操作不可恢复。",
+            "删除连接",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No);
+        if (answer != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        try
+        {
+            await _connections.DeleteAsync(host);
+            SwitchConnection(_connections.Current);
+            RefreshConnectionList();
+            ShowResult(ConnectionResultText, "连接已删除", ResultIdle);
+        }
+        catch (Exception ex)
+        {
+            ShowResult(ConnectionResultText, $"删除失败：{ex.Message}", ResultError);
+        }
+    }
+
+    /// <summary>连接列表行：只做展示，配置本身始终以 <see cref="SyncHost.Profile"/> 为准。</summary>
+    private sealed class ConnectionRow : INotifyPropertyChanged
+    {
+        public ConnectionRow(SyncHost host)
+        {
+            Host = host;
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        public SyncHost Host { get; }
+
+        public string Name => Host.DisplayName;
+
+        public bool Enabled => Host.Profile.Enabled;
+
+        /// <summary>启用状态标签：勾选框之外再给一句可读文字，禁用时一眼能看出这条连接没在跑。</summary>
+        public string EnabledText => Enabled ? "已启用" : "已禁用";
+
+        public Brush EnabledForeground => StateBrush(Enabled ? "StateSuccess" : "StateIdle", soft: false);
+
+        public Brush EnabledBackground => StateBrush(Enabled ? "StateSuccess" : "StateIdle", soft: true);
+
+        /// <summary>
+        /// 传输 / 运行状态标签：禁用的连接给「未运行」，已启用但引擎还没起来的给「待启动」，
+        /// 其余跟随引擎阶段（已同步 / 扫描中 / 传输中 / 已暂停 / 异常）。
+        /// </summary>
+        public string PhaseText => !Enabled
+            ? "未运行"
+            : Host.Status.Phase == EnginePhase.Stopped
+                ? "待启动"
+                : PhaseBadgeText(Host.Status.Phase);
+
+        public Brush PhaseForeground =>
+            StateBrush(Enabled ? PhaseStateKey(Host.Status.Phase) : "StateIdle", soft: false);
+
+        public Brush PhaseBackground =>
+            StateBrush(Enabled ? PhaseStateKey(Host.Status.Phase) : "StateIdle", soft: true);
+
+        /// <summary>引擎状态变化后刷新行内标签；空属性名表示所有绑定属性都要重新取值。</summary>
+        public void Refresh() =>
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(string.Empty));
+
+        private static Brush StateBrush(string key, bool soft) =>
+            (Brush)Application.Current.FindResource(soft ? $"{key}SoftBrush" : $"{key}Brush");
+
+        public string Detail
+        {
+            get
+            {
+                var profile = Host.Profile;
+                var local = string.IsNullOrWhiteSpace(profile.LocalRoot)
+                    ? "（未设置本地目录）"
+                    : profile.LocalRoot;
+                var remoteRoot = string.IsNullOrWhiteSpace(profile.RemoteRoot)
+                    ? "（未设置远端目录）"
+                    : profile.RemoteRoot;
+                var remote = string.IsNullOrWhiteSpace(profile.Remote.Host)
+                    ? "（未设置主机）"
+                    : $"{profile.Remote.User}@{profile.Remote.Host}:{profile.Remote.Port}";
+                return $"{local}  →  {remote}  {remoteRoot}";
+            }
+        }
     }
 
     private void ApplyInitialPage(string page)
@@ -224,7 +583,6 @@ public partial class MainWindow : Window
         }
 
         ApplyPauseButton();
-        _tray.SetPaused(_host.IsPaused);
     }
 
     /// <summary>运行中显示红色「暂停」，暂停中显示绿色「恢复」，与右上角徽章配色一致。</summary>
@@ -235,9 +593,20 @@ public partial class MainWindow : Window
         PauseButton.Style = (Style)FindResource(paused ? "SuccessButton" : "DangerButton");
     }
 
+    /// <summary>
+    /// 状态页的错误行：有内容才占位，空文本时整行折叠——
+    /// 否则空 TextBlock 仍占一行行高，会把动作区与日志卡之间撑出多余的空白。
+    /// </summary>
+    private void SetStatusHint(string? message)
+    {
+        var text = message?.Trim() ?? string.Empty;
+        StatusHintText.Text = text;
+        StatusHintText.Visibility = text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+    }
+
     public void ShowHint(string message)
     {
-        StatusHintText.Text = message;
+        SetStatusHint(message);
         StatusBarText.Text = message;
     }
 
@@ -260,19 +629,53 @@ public partial class MainWindow : Window
 
     private void OnStatusChanged(object? sender, EngineStatus status)
     {
-        Dispatcher.BeginInvoke(new Action(() => ApplyStatus(status)));
+        // 切换连接后可能还有旧宿主排队的回调，只认当前连接
+        if (!ReferenceEquals(sender, _host))
+        {
+            return;
+        }
+
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (ReferenceEquals(sender, _host))
+            {
+                ApplyStatus(status);
+            }
+        }));
     }
 
     private void OnProgress(object? sender, string message)
     {
-        Dispatcher.BeginInvoke(new Action(() => StatusBarText.Text = message));
+        if (!ReferenceEquals(sender, _host))
+        {
+            return;
+        }
+
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (ReferenceEquals(sender, _host))
+            {
+                StatusBarText.Text = message;
+            }
+        }));
     }
 
     private void OnTransferProgress(object? sender, TransferProgressInfo info)
     {
+        if (!ReferenceEquals(sender, _host))
+        {
+            return;
+        }
+
         if (!Dispatcher.CheckAccess())
         {
-            Dispatcher.BeginInvoke(new Action(() => ApplyTransferProgress(info)));
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (ReferenceEquals(sender, _host))
+                {
+                    ApplyTransferProgress(info);
+                }
+            }));
             return;
         }
 
@@ -442,35 +845,34 @@ public partial class MainWindow : Window
 
         if (!string.IsNullOrWhiteSpace(status.LastError))
         {
-            StatusHintText.Text = status.LastError;
+            SetStatusHint(status.LastError);
         }
         else if (status.Phase == EnginePhase.Idle)
         {
-            StatusHintText.Text = string.Empty;
+            SetStatusHint(null);
         }
 
         ApplyPauseButton();
-        _tray.SetPaused(_host.IsPaused);
-        _tray.SetState(MapTrayState(status.Phase), $"PetrelPush — {PhaseDisplay(status.Phase)}");
+        UpdateConnectionUi();
     }
 
     private void ApplyPhaseBadge(EnginePhase phase)
     {
-        var (text, foregroundKey, backgroundKey) = phase switch
+        // 顶栏是深色底，状态胶囊用半透明白底 + 对应状态的亮色文字
+        var (text, foregroundKey) = phase switch
         {
-            EnginePhase.Idle => ("已同步", "StateSuccessBrush", "StateSuccessSoftBrush"),
-            EnginePhase.Scanning => ("扫描中", "StateWarningBrush", "StateWarningSoftBrush"),
-            EnginePhase.Transferring => ("传输中", "StateWarningBrush", "StateWarningSoftBrush"),
-            EnginePhase.Paused => ("已暂停", "StateErrorBrush", "StateErrorSoftBrush"),
-            EnginePhase.Error => ("异常", "StateErrorBrush", "StateErrorSoftBrush"),
-            _ => ("已停止", "StateIdleBrush", "StateIdleSoftBrush"),
+            EnginePhase.Idle => ("已同步", "BadgeSuccessBrush"),
+            EnginePhase.Scanning => ("扫描中", "BadgeWarningBrush"),
+            EnginePhase.Transferring => ("传输中", "BadgeWarningBrush"),
+            EnginePhase.Paused => ("已暂停", "BadgeErrorBrush"),
+            EnginePhase.Error => ("异常", "BadgeErrorBrush"),
+            _ => ("已停止", "BadgeIdleBrush"),
         };
 
         // 右上角只显示状态文字，传输进度统一在右下角面板展示
         PhaseText.Text = text;
         PhaseText.Foreground = (Brush)FindResource(foregroundKey);
         PhaseDot.Fill = (Brush)FindResource(foregroundKey);
-        PhaseBadge.Background = (Brush)FindResource(backgroundKey);
     }
 
     /// <summary>手动下载占用右下角面板：标题为下载中，行内是文件名与进度。</summary>
@@ -505,33 +907,12 @@ public partial class MainWindow : Window
         ProfileHeader.Text = string.IsNullOrWhiteSpace(profile.ProfileName)
             ? profile.ProfileId
             : $"{profile.ProfileName}（{profile.ProfileId}）";
-        ProfileNameBox.Text = profile.ProfileName;
-        LocalRootBox.Text = profile.LocalRoot;
-        RemoteRootBox.Text = profile.RemoteRoot;
 
-        HostBox.Text = profile.Remote.Host;
-        PortBox.Text = profile.Remote.Port.ToString();
-        UserBox.Text = profile.Remote.User;
-        AuthTypeCombo.SelectedIndex = string.Equals(profile.Remote.Auth.Type, "key", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
-        PrivateKeyBox.Text = profile.Remote.Auth.PrivateKeyPath ?? string.Empty;
-        PasswordInput.Password = profile.Remote.Password ?? string.Empty;
-        FingerprintText.Text = string.IsNullOrWhiteSpace(profile.Remote.HostKeyFingerprint)
-            ? "主机指纹：未确认（首次同步前请点“测试连接”完成确认）"
-            : $"主机指纹：{profile.Remote.HostKeyFingerprint}";
-
-        DebounceBox.Text = profile.Sync.DebounceMs.ToString();
-        MaxForceBox.Text = profile.Sync.MaxForceTriggerMs.ToString();
-        PollBox.Text = profile.Sync.PollIntervalSec.ToString();
-        DeepVerifyDaysBox.Text = profile.Sync.DeepVerifyIntervalDays.ToString();
-        ParallelBox.Text = profile.Sync.MaxParallelTransfers.ToString();
-        RateLimitBox.Text = profile.Sync.RateLimitKbps.ToString();
-        LargeFileBox.Text = profile.Sync.LargeFileThresholdMB.ToString();
-        ExecutableSuffixesBox.Text = string.Join(", ", profile.Sync.ExecutableSuffixes ?? Array.Empty<string>());
-
-        SyncEmptyDirsCheck.IsChecked = profile.Sync.SyncEmptyDirs;
-        DeleteEmptyDirsCheck.IsChecked = profile.Sync.DeleteEmptyDirs;
-        FollowSymlinksCheck.IsChecked = profile.Sync.FollowSymlinks;
-        DryRunCheck.IsChecked = profile.Sync.DryRun;
+        // 摘要卡的第二行：一眼看清「本地目录 → 远端目标与远端目录」
+        var remote = profile.Remote;
+        ProfileDetailText.Text = string.IsNullOrWhiteSpace(profile.LocalRoot)
+            ? "尚未配置本地目录与远端目标"
+            : $"{profile.LocalRoot}  →  {remote.User}@{remote.Host}:{remote.Port}  {profile.RemoteRoot}";
 
         LoadSettingsUi(profile);
         LoadIgnoreEditor(profile);
@@ -552,7 +933,8 @@ public partial class MainWindow : Window
 
         SettingsResultText.Text = string.Empty;
         SettingsProfilePathText.Text = _store.GetProfileDirectory(profile.ProfileId);
-        SettingsLogPathText.Text = _store.GetLogDirectory(profile.ProfileId);
+        // 多连接共用一份日志：显示实际写入目录，而不是当前连接的（可能为空）目录
+        SettingsLogPathText.Text = LoggingSetup.LogDirectory;
         LoadLocalTerminalOptions(profile);
     }
 
@@ -631,136 +1013,11 @@ public partial class MainWindow : Window
         LocalTerminalHintText.Visibility = isNotice ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    /// <summary>以「已保存的配置」为基础做副本，各卡片只覆盖自己那几个字段。</summary>
-    private SyncProfile CloneProfile() => _host.Profile.Clone();
-
-    /// <summary>「基本」卡片：配置名称、本地目录、远端目录。</summary>
-    private SyncProfile BuildBasicProfileFromUi()
-    {
-        var profile = CloneProfile();
-        profile.ProfileName = ProfileNameBox.Text.Trim();
-        profile.LocalRoot = LocalRootBox.Text.Trim();
-        profile.RemoteRoot = RemoteRootBox.Text.Trim();
-        return profile;
-    }
-
-    /// <summary>「远端连接」卡片：主机、端口、用户、认证方式与凭据。</summary>
-    private SyncProfile BuildRemoteProfileFromUi()
-    {
-        var profile = CloneProfile();
-        profile.Remote.Host = HostBox.Text.Trim();
-        profile.Remote.Port = ReadInt(PortBox, 22);
-        profile.Remote.User = UserBox.Text.Trim();
-        profile.Remote.Auth.Type = AuthTypeCombo.SelectedIndex == 1 ? "key" : "password";
-        profile.Remote.Auth.PrivateKeyPath = string.IsNullOrWhiteSpace(PrivateKeyBox.Text)
-            ? null
-            : PrivateKeyBox.Text.Trim();
-
-        // 口令框留空表示沿用已保存的凭据，避免把 secrets.bin 清空
-        var typedPassword = PasswordInput.Password;
-        if (!string.IsNullOrEmpty(typedPassword))
-        {
-            profile.Remote.Password = typedPassword;
-        }
-
-        return profile;
-    }
-
-    /// <summary>「设置 · 同步参数」卡片：去抖、轮询、并发、限速、空目录等。</summary>
-    private SyncProfile BuildSyncProfileFromUi()
-    {
-        var source = _host.Profile;
-        var profile = CloneProfile();
-
-        profile.Sync.DebounceMs = Math.Max(0, ReadInt(DebounceBox, 500));
-        profile.Sync.MaxForceTriggerMs = Math.Max(profile.Sync.DebounceMs, ReadInt(MaxForceBox, 5000));
-        profile.Sync.PollIntervalSec = Math.Max(1, ReadInt(PollBox, 30));
-        profile.Sync.DeepVerifyIntervalDays = Math.Max(1, ReadInt(DeepVerifyDaysBox, 7));
-        profile.Sync.MaxParallelTransfers = Math.Max(1, ReadInt(ParallelBox, 4));
-        profile.Sync.RateLimitKbps = Math.Max(0, ReadInt(RateLimitBox, 0));
-        profile.Sync.LargeFileThresholdMB = Math.Max(0, ReadInt(LargeFileBox, 100));
-
-        var suffixes = (ExecutableSuffixesBox.Text ?? string.Empty)
-            .Split([',', ';', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        profile.Sync.ExecutableSuffixes = suffixes.Length > 0 ? suffixes : source.Sync.ExecutableSuffixes;
-
-        profile.Sync.SyncEmptyDirs = SyncEmptyDirsCheck.IsChecked == true;
-        profile.Sync.DeleteEmptyDirs = DeleteEmptyDirsCheck.IsChecked == true;
-        profile.Sync.FollowSymlinks = FollowSymlinksCheck.IsChecked == true;
-        profile.Sync.DryRun = DryRunCheck.IsChecked == true;
-
-        // 开机自启在「设置」页即时保存，这里沿用源 profile 的值，避免保存时被覆盖
-        profile.Sync.AutoStart = source.Sync.AutoStart;
-
-        return profile;
-    }
-
-    /// <summary>「基本」卡片校验：只看配置名称、本地目录、远端目录。</summary>
-    private static List<string> ValidateBasicCard(SyncProfile profile)
-    {
-        var errors = new List<string>();
-
-        if (string.IsNullOrWhiteSpace(profile.LocalRoot))
-        {
-            errors.Add("请填写本地目录");
-        }
-        else if (!Directory.Exists(profile.LocalRoot))
-        {
-            errors.Add($"本地目录不存在：{profile.LocalRoot}");
-        }
-
-        if (!(profile.RemoteRoot ?? string.Empty).StartsWith('/'))
-        {
-            errors.Add("远端目录必须是绝对路径（以 / 开头）");
-        }
-
-        return errors;
-    }
-
-    /// <summary>「远端连接」卡片校验：只看主机、端口、用户与凭据。</summary>
-    private static List<string> ValidateRemoteCard(SyncProfile profile)
-    {
-        var errors = new List<string>();
-
-        if (string.IsNullOrWhiteSpace(profile.Remote.Host))
-        {
-            errors.Add("请填写主机");
-        }
-
-        if (profile.Remote.Port is < 1 or > 65535)
-        {
-            errors.Add("端口必须在 1~65535 之间");
-        }
-
-        if (string.IsNullOrWhiteSpace(profile.Remote.User))
-        {
-            errors.Add("请填写用户名");
-        }
-
-        if (string.Equals(profile.Remote.Auth.Type, "key", StringComparison.OrdinalIgnoreCase))
-        {
-            if (string.IsNullOrWhiteSpace(profile.Remote.Auth.PrivateKeyPath))
-            {
-                errors.Add("密钥认证需要填写私钥路径");
-            }
-            else if (!File.Exists(profile.Remote.Auth.PrivateKeyPath))
-            {
-                errors.Add($"私钥文件不存在：{profile.Remote.Auth.PrivateKeyPath}");
-            }
-        }
-        else if (string.IsNullOrEmpty(profile.Remote.Password))
-        {
-            errors.Add("密码认证需要填写密码");
-        }
-
-        return errors;
-    }
-
     private void LoadIgnoreEditor(SyncProfile profile)
     {
         if (string.IsNullOrWhiteSpace(profile.LocalRoot))
         {
-            IgnorePathText.Text = "（请先在「配置」页设置本地目录）";
+            IgnorePathText.Text = "（请先在「配置」页点该连接的「编辑」设置本地目录）";
             SyncIgnoreEditor.Text = DefaultIgnoreTemplate;
             return;
         }
@@ -778,54 +1035,10 @@ public partial class MainWindow : Window
         }
     }
 
-    private static int ReadInt(TextBox box, int fallback)
+    /// <summary>连接行上的紧凑阶段文字（配置页一行放得下，与顶栏胶囊同一口径）。</summary>
+    private static string PhaseBadgeText(EnginePhase phase) => phase switch
     {
-        return int.TryParse((box.Text ?? string.Empty).Trim(), out var value) ? value : fallback;
-    }
-
-    /// <summary>远端根目录命中系统目录（或其上级）时，只做一次二次确认，不构成对用法的限制。</summary>
-    private bool ConfirmProtectedRemoteRoot(SyncProfile profile)
-    {
-        if (string.IsNullOrWhiteSpace(profile.RemoteRoot) || profile.ProtectedRootAcknowledged)
-        {
-            return true;
-        }
-
-        bool isProtected;
-        try
-        {
-            isProtected = PathGuard.IsProtectedRoot(profile.RemoteRoot);
-        }
-        catch (ArgumentException)
-        {
-            return true;
-        }
-
-        if (!isProtected)
-        {
-            return true;
-        }
-
-        var answer = MessageBox.Show(
-            this,
-            $"远端根目录 \"{profile.RemoteRoot}\" 位于系统目录或其上级。\n继续同步可能覆盖系统文件，确认使用这个目录？",
-            "PetrelPush — 远端根目录确认",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning,
-            MessageBoxResult.No);
-
-        if (answer != MessageBoxResult.Yes)
-        {
-            return false;
-        }
-
-        profile.ProtectedRootAcknowledged = true;
-        return true;
-    }
-
-    private static string PhaseDisplay(EnginePhase phase) => phase switch
-    {
-        EnginePhase.Idle => "空闲（已同步）",
+        EnginePhase.Idle => "已同步",
         EnginePhase.Scanning => "扫描中",
         EnginePhase.Transferring => "传输中",
         EnginePhase.Paused => "已暂停",
@@ -833,12 +1046,13 @@ public partial class MainWindow : Window
         _ => "已停止",
     };
 
-    private static TrayState MapTrayState(EnginePhase phase) => phase switch
+    /// <summary>阶段对应的主题状态色键：成功 / 处理中 / 异常 / 空闲四档。</summary>
+    private static string PhaseStateKey(EnginePhase phase) => phase switch
     {
-        EnginePhase.Scanning or EnginePhase.Transferring => TrayState.Busy,
-        EnginePhase.Error => TrayState.Error,
-        EnginePhase.Paused => TrayState.Paused,
-        _ => TrayState.Idle,
+        EnginePhase.Idle => "StateSuccess",
+        EnginePhase.Scanning or EnginePhase.Transferring => "StateWarning",
+        EnginePhase.Paused or EnginePhase.Error => "StateError",
+        _ => "StateIdle",
     };
 
     // ── 文件页：本地 / 远端浏览、拖拽与下载 ───────────────────────
@@ -1258,9 +1472,14 @@ public partial class MainWindow : Window
             return;
         }
 
+        var profileId = _host.Profile.ProfileId;
         try
         {
-            var window = TerminalWindow.ForLocal(directory, preference);
+            var window = TerminalWindow.ForLocal(
+                directory,
+                preference,
+                _host.Profile.QuickAccess,
+                quickAccess => PersistQuickAccess(profileId, quickAccess));
             window.Owner = this;
             window.Show();
         }
@@ -1268,6 +1487,24 @@ public partial class MainWindow : Window
         {
             ShowMessage($"打开本地终端失败：{ex.Message}", isError: true);
         }
+    }
+
+    /// <summary>
+    /// 终端窗口增删快速命令 / 快速路径后回写 config.json。
+    /// 只改这一块配置，不重建引擎（快速入口与同步无关）。
+    /// 按 profileId 找回所属连接，避免窗口打开后切换连接写错目标。
+    /// </summary>
+    private void PersistQuickAccess(string profileId, QuickAccessOptions quickAccess)
+    {
+        var host = _connections.Hosts.FirstOrDefault(
+            candidate => string.Equals(candidate.Profile.ProfileId, profileId, StringComparison.Ordinal));
+        if (host is null)
+        {
+            return;
+        }
+
+        host.Profile.QuickAccess = quickAccess;
+        _store.Save(host.Profile);
     }
 
     /// <summary>外部终端（Windows Terminal）：新开独立窗口并落在指定目录。</summary>
@@ -1557,10 +1794,15 @@ public partial class MainWindow : Window
         }
 
         var absolute = BuildRemoteDisplayPath(_host.Profile.RemoteRoot, relative);
+        var profile = _host.Profile;
+        var profileId = profile.ProfileId;
 
         try
         {
-            var window = TerminalWindow.ForRemote(_host.Profile, absolute);
+            var window = TerminalWindow.ForRemote(
+                profile,
+                absolute,
+                quickAccess => PersistQuickAccess(profileId, quickAccess));
             window.Owner = this;
             window.Show();
         }
@@ -2169,200 +2411,18 @@ public partial class MainWindow : Window
         _snapshot = EmptySnapshot;
     }
 
-    private void OnBrowseLocal(object sender, RoutedEventArgs e)
-    {
-        var dialog = new OpenFolderDialog { Title = "选择要同步的本地目录" };
-        var current = LocalRootBox.Text.Trim();
-        if (Directory.Exists(current))
-        {
-            dialog.InitialDirectory = current;
-        }
+    /// <summary>配置页结果文本的颜色：取主题状态色，避免硬编码 Brushes 与整体配色脱节。</summary>
+    private Brush ResultSuccess => (Brush)FindResource("StateSuccessBrush");
 
-        if (dialog.ShowDialog(this) == true)
-        {
-            LocalRootBox.Text = dialog.FolderName;
-        }
-    }
+    private Brush ResultIdle => (Brush)FindResource("StateIdleBrush");
 
-    private void OnBrowseKey(object sender, RoutedEventArgs e)
-    {
-        var dialog = new OpenFileDialog
-        {
-            Title = "选择 SSH 私钥",
-            Filter = "所有文件|*.*",
-        };
-
-        if (dialog.ShowDialog(this) == true)
-        {
-            PrivateKeyBox.Text = dialog.FileName;
-        }
-    }
-
-    private void OnAuthTypeChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (PasswordInput is null || PrivateKeyBox is null)
-        {
-            return;
-        }
-
-        var useKey = AuthTypeCombo.SelectedIndex == 1;
-        PasswordInput.IsEnabled = !useKey;
-        PrivateKeyBox.IsEnabled = useKey;
-    }
-
-    /// <summary>
-    /// 「远端连接」卡片右上角的「测试连接」：先保存本卡片的连接信息，再测试连接并重建引擎。
-    /// </summary>
-    private async void OnTestConnection(object sender, RoutedEventArgs e)
-    {
-        var profile = BuildRemoteProfileFromUi();
-        var errors = ValidateRemoteCard(profile);
-        if (errors.Count > 0)
-        {
-            ShowResult(TestResultText, string.Join("；", errors), Brushes.Firebrick);
-            return;
-        }
-
-        if (!ConfirmProtectedRemoteRoot(profile))
-        {
-            ShowResult(TestResultText, "已取消（远端根目录位于系统目录）", Brushes.DimGray);
-            return;
-        }
-
-        ShowResult(TestResultText, "连接中…", Brushes.DimGray);
-        try
-        {
-            await _host.TestConnectionAsync(profile, null);
-            await _host.RestartAsync(profile);
-            ShowResult(TestResultText, $"连接成功（{DateTime.Now:HH:mm:ss}），远端连接配置已保存并生效", Brushes.Green);
-            RefreshRemoteCard();
-        }
-        catch (Exception ex)
-        {
-            ShowResult(TestResultText, ex.Message, Brushes.Firebrick);
-            _host.RequestSync();
-        }
-    }
-
-    /// <summary>「基本」卡片右上角的「保存」：只保存配置名称与两个目录，然后重建引擎。</summary>
-    private async void OnSaveBasicConfig(object sender, RoutedEventArgs e)
-    {
-        var profile = BuildBasicProfileFromUi();
-        var errors = ValidateBasicCard(profile);
-        if (errors.Count > 0)
-        {
-            ShowResult(BasicSaveResultText, string.Join("；", errors), Brushes.Firebrick);
-            return;
-        }
-
-        if (!ConfirmProtectedRemoteRoot(profile))
-        {
-            ShowResult(BasicSaveResultText, "已取消（远端根目录位于系统目录）", Brushes.DimGray);
-            return;
-        }
-
-        var previousLocalRoot = _host.Profile.LocalRoot;
-        var previousRemoteRoot = _host.Profile.RemoteRoot;
-        try
-        {
-            // 凭据不属于本卡片，传 null 沿用已保存的口令
-            await _host.SaveAndRestartAsync(profile, null);
-
-            var rootsChanged =
-                !string.Equals(previousLocalRoot, profile.LocalRoot, StringComparison.OrdinalIgnoreCase)
-                || !string.Equals(previousRemoteRoot, profile.RemoteRoot, StringComparison.Ordinal);
-            ShowResult(
-                BasicSaveResultText,
-                rootsChanged
-                    ? $"已保存并应用（{DateTime.Now:HH:mm:ss}）；同步目录已变更，历史快照会被清空，本轮将全量上传到新的远端目录"
-                    : $"已保存并应用（{DateTime.Now:HH:mm:ss}）",
-                Brushes.Green);
-            RefreshBasicCard();
-        }
-        catch (Exception ex)
-        {
-            ShowResult(BasicSaveResultText, ex.Message, Brushes.Firebrick);
-        }
-    }
-
-    /// <summary>「设置 · 同步参数」卡片右上角的「应用」：只保存同步参数。</summary>
-    private async void OnSaveConfig(object sender, RoutedEventArgs e)
-    {
-        var profile = BuildSyncProfileFromUi();
-        var errors = profile.Validate().ToList();
-        if (errors.Count > 0)
-        {
-            ShowResult(SettingsSaveResultText, string.Join("；", errors), Brushes.Firebrick);
-            return;
-        }
-
-        try
-        {
-            await _host.SaveAndRestartAsync(profile, null);
-            StartupRegistration.Apply(profile.Sync.AutoStart);
-            ShowResult(SettingsSaveResultText, $"已保存并应用（{DateTime.Now:HH:mm:ss}）", Brushes.Green);
-            RefreshSyncCard();
-            InvalidateFilePage();
-        }
-        catch (Exception ex)
-        {
-            ShowResult(SettingsSaveResultText, ex.Message, Brushes.Firebrick);
-        }
-    }
+    private Brush ResultError => (Brush)FindResource("StateErrorBrush");
 
     /// <summary>在卡片右上角的结果文本里显示提示。</summary>
     private static void ShowResult(System.Windows.Controls.TextBlock target, string message, Brush brush)
     {
         target.Foreground = brush;
         target.Text = message;
-    }
-
-    /// <summary>只刷新「基本」卡片，保留其他卡片里未保存的编辑。</summary>
-    private void RefreshBasicCard()
-    {
-        var profile = _host.Profile;
-        ProfileHeader.Text = string.IsNullOrWhiteSpace(profile.ProfileName)
-            ? profile.ProfileId
-            : $"{profile.ProfileName}（{profile.ProfileId}）";
-        ProfileNameBox.Text = profile.ProfileName;
-        LocalRootBox.Text = profile.LocalRoot;
-        RemoteRootBox.Text = profile.RemoteRoot;
-        LoadIgnoreEditor(profile);
-        InvalidateFilePage();
-    }
-
-    /// <summary>只刷新「同步参数」卡片，保留其他卡片里未保存的编辑。</summary>
-    private void RefreshSyncCard()
-    {
-        var profile = _host.Profile;
-        DebounceBox.Text = profile.Sync.DebounceMs.ToString();
-        MaxForceBox.Text = profile.Sync.MaxForceTriggerMs.ToString();
-        PollBox.Text = profile.Sync.PollIntervalSec.ToString();
-        DeepVerifyDaysBox.Text = profile.Sync.DeepVerifyIntervalDays.ToString();
-        ParallelBox.Text = profile.Sync.MaxParallelTransfers.ToString();
-        RateLimitBox.Text = profile.Sync.RateLimitKbps.ToString();
-        LargeFileBox.Text = profile.Sync.LargeFileThresholdMB.ToString();
-        ExecutableSuffixesBox.Text = string.Join(", ", profile.Sync.ExecutableSuffixes ?? Array.Empty<string>());
-        SyncEmptyDirsCheck.IsChecked = profile.Sync.SyncEmptyDirs;
-        DeleteEmptyDirsCheck.IsChecked = profile.Sync.DeleteEmptyDirs;
-        FollowSymlinksCheck.IsChecked = profile.Sync.FollowSymlinks;
-        DryRunCheck.IsChecked = profile.Sync.DryRun;
-    }
-
-    /// <summary>只刷新「远端连接」卡片，保留其他卡片里未保存的编辑。</summary>
-    private void RefreshRemoteCard()
-    {
-        var profile = _host.Profile;
-        HostBox.Text = profile.Remote.Host;
-        PortBox.Text = profile.Remote.Port.ToString();
-        UserBox.Text = profile.Remote.User;
-        AuthTypeCombo.SelectedIndex = string.Equals(profile.Remote.Auth.Type, "key", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
-        PrivateKeyBox.Text = profile.Remote.Auth.PrivateKeyPath ?? string.Empty;
-        PasswordInput.Password = profile.Remote.Password ?? string.Empty;
-        FingerprintText.Text = string.IsNullOrWhiteSpace(profile.Remote.HostKeyFingerprint)
-            ? "主机指纹：未确认（首次同步前请点“测试连接”完成确认）"
-            : $"主机指纹：{profile.Remote.HostKeyFingerprint}";
-        InvalidateFilePage();
     }
 
     private void OnSyncNow(object sender, RoutedEventArgs e)
@@ -2473,9 +2533,54 @@ public partial class MainWindow : Window
         RefreshLogView();
     }
 
+    private void OnLogConnectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressConnectionFilter)
+        {
+            return;
+        }
+
+        _connectionFilter = (LogConnectionCombo.SelectedItem as ComboBoxItem)?.Tag as string;
+        RefreshLogView();
+    }
+
+    /// <summary>日志页「连接」下拉：全部 / 应用 / 各条连接，连接增删改名后重建并保留当前选择。</summary>
+    private void RefreshLogConnectionOptions()
+    {
+        var previous = _connectionFilter;
+
+        _suppressConnectionFilter = true;
+        try
+        {
+            LogConnectionCombo.Items.Clear();
+            LogConnectionCombo.Items.Add(new ComboBoxItem { Content = "全部" });
+            LogConnectionCombo.Items.Add(new ComboBoxItem { Content = "应用", Tag = "应用" });
+
+            foreach (var host in _connections.Hosts)
+            {
+                LogConnectionCombo.Items.Add(new ComboBoxItem
+                {
+                    Content = host.DisplayName,
+                    Tag = host.DisplayName,
+                });
+            }
+
+            var match = LogConnectionCombo.Items
+                .OfType<ComboBoxItem>()
+                .FirstOrDefault(item => item.Tag is string tag && string.Equals(tag, previous, StringComparison.Ordinal));
+
+            LogConnectionCombo.SelectedItem = match ?? LogConnectionCombo.Items[0];
+            _connectionFilter = (LogConnectionCombo.SelectedItem as ComboBoxItem)?.Tag as string;
+        }
+        finally
+        {
+            _suppressConnectionFilter = false;
+        }
+    }
+
     private void OnOpenLogs(object sender, RoutedEventArgs e)
     {
-        var directory = _store.GetLogDirectory(_host.Profile.ProfileId);
+        var directory = LoggingSetup.LogDirectory;
         Directory.CreateDirectory(directory);
         Process.Start(new ProcessStartInfo("explorer.exe", $"\"{directory}\"") { UseShellExecute = true });
     }
@@ -2501,8 +2606,10 @@ public partial class MainWindow : Window
 
         try
         {
-            var applied = StartupRegistration.Apply(enabled);
             _store.Save(profile);
+
+            // 开机自启是应用级开关：任一条连接开启即注册；全部关闭才移除
+            var applied = StartupRegistration.Apply(_connections.Hosts.Any(host => host.Profile.Sync.AutoStart));
 
             if (!applied)
             {
@@ -2513,8 +2620,8 @@ public partial class MainWindow : Window
 
             SettingsResultText.Foreground = (Brush)FindResource("StateSuccessBrush");
             SettingsResultText.Text = enabled
-                ? $"已开启开机自启（{DateTime.Now:HH:mm:ss} 生效）"
-                : "已关闭开机自启";
+                ? $"已开启本连接的开机自启（{DateTime.Now:HH:mm:ss} 生效；任一条连接开启即随系统启动）"
+                : "已关闭本连接的开机自启（仍有其它连接开启时保持自启）";
         }
         catch (Exception ex)
         {
@@ -2564,7 +2671,7 @@ public partial class MainWindow : Window
 
         var profileId = _host.Profile.ProfileId;
         var directory = kind == "logs"
-            ? _store.GetLogDirectory(profileId)
+            ? LoggingSetup.LogDirectory
             : _store.GetProfileDirectory(profileId);
 
         try
@@ -2586,13 +2693,26 @@ public partial class MainWindow : Window
 
     private void OnLogEmitted(LogEvent logEvent)
     {
-        var line = $"[{logEvent.Timestamp:HH:mm:ss} {LevelTag(logEvent.Level)}] {logEvent.RenderMessage()}";
+        // 多连接共用一条日志流：每行带上 Connection 上下文（连接名），否则分不清来自哪条连接
+        var connection = logEvent.Properties.TryGetValue("Connection", out var property)
+                         && property is ScalarValue { Value: string name }
+                         && !string.IsNullOrWhiteSpace(name)
+            ? name
+            : null;
+
+        var line = $"[{logEvent.Timestamp:HH:mm:ss} {LevelTag(logEvent.Level)}] ";
+        if (connection is not null)
+        {
+            line += $"[{connection}] ";
+        }
+
+        line += logEvent.RenderMessage();
         if (logEvent.Exception is not null)
         {
             line += $"  ({logEvent.Exception.Message})";
         }
 
-        Dispatcher.BeginInvoke(new Action(() => AppendLog(LogEntry.Create(logEvent.Level, line))));
+        Dispatcher.BeginInvoke(new Action(() => AppendLog(LogEntry.Create(logEvent.Level, line, connection))));
     }
 
     private void AppendLog(LogEntry entry)
@@ -2603,7 +2723,7 @@ public partial class MainWindow : Window
             _allLogs.RemoveRange(0, MaxLogLines / 4);
         }
 
-        if (entry.Level < _minLevel)
+        if (!MatchesLogFilter(entry))
         {
             return;
         }
@@ -2635,7 +2755,7 @@ public partial class MainWindow : Window
         _visibleLogs.Clear();
         foreach (var entry in _allLogs)
         {
-            if (entry.Level >= _minLevel)
+            if (MatchesLogFilter(entry))
             {
                 _visibleLogs.Add(entry);
             }
@@ -2643,6 +2763,12 @@ public partial class MainWindow : Window
 
         UpdateEmptyLogHint();
     }
+
+    /// <summary>日志页筛选：级别与连接两个维度同时生效。</summary>
+    private bool MatchesLogFilter(LogEntry entry) =>
+        entry.Level >= _minLevel
+        && (_connectionFilter is null
+            || string.Equals(entry.Connection, _connectionFilter, StringComparison.Ordinal));
 
     private static string LevelTag(LogEventLevel level) => level switch
     {
@@ -2691,10 +2817,16 @@ public sealed class TransferRow : INotifyPropertyChanged
 /// <summary>日志行：按级别提供颜色与字重，供日志列表着色显示。</summary>
 public sealed class LogEntry
 {
-    private LogEntry(LogEventLevel level, string text, Brush foreground, FontWeight fontWeight)
+    private LogEntry(
+        LogEventLevel level,
+        string text,
+        string? connection,
+        Brush foreground,
+        FontWeight fontWeight)
     {
         Level = level;
         Text = text;
+        Connection = connection;
         Foreground = foreground;
         FontWeight = fontWeight;
     }
@@ -2703,12 +2835,15 @@ public sealed class LogEntry
 
     public string Text { get; }
 
+    /// <summary>日志所属连接（Serilog 的 Connection 上下文）；应用自身日志为「应用」。</summary>
+    public string? Connection { get; }
+
     public Brush Foreground { get; }
 
     public FontWeight FontWeight { get; }
 
-    public static LogEntry Create(LogEventLevel level, string text) =>
-        new(level, text, BrushFor(level), WeightFor(level));
+    public static LogEntry Create(LogEventLevel level, string text, string? connection) =>
+        new(level, text, connection, BrushFor(level), WeightFor(level));
 
     private static Brush BrushFor(LogEventLevel level) => level switch
     {

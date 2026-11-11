@@ -68,7 +68,7 @@ public sealed class SshShellSession : ITerminalSession
             Log.Warning("当前 SSH.NET 版本未暴露 ShellStream 窗口尺寸接口，缩放窗口不会触发远端重排");
         }
 
-        var validator = new HostKeyValidator(profile.Remote.HostKeyFingerprint);
+        var validator = new HostKeyValidator(profile.Remote);
         var connectionInfo = SshConnectionFactory.Create(profile.Remote);
 
         var client = new SshClient(connectionInfo)
@@ -106,6 +106,11 @@ public sealed class SshShellSession : ITerminalSession
                 $"SSH 认证失败：{Label(profile)}。请检查密码/私钥；"
                 + "若使用 root + 密码，请确认 PermitRootLogin yes、PasswordAuthentication yes 且 root 密码未被锁定。",
                 ex);
+        }
+        catch (SshConnectionException ex) when (validator.Mismatch && validator.Failure is not null)
+        {
+            client.Dispose();
+            throw new HostKeyMismatchException(validator.Failure, ex);
         }
         catch (SshConnectionException ex) when (validator.Failure is not null)
         {

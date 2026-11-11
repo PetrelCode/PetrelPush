@@ -1,15 +1,19 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Web.WebView2.Core;
+using Microsoft.Win32;
 using PetrelPush.Core.Abstractions;
 using PetrelPush.Core.Model;
 using PetrelPush.Transport;
@@ -42,6 +46,10 @@ public partial class TerminalWindow : Window
     private readonly bool _isRemoteSession;
     private readonly ConcurrentQueue<byte[]> _pending = new();
 
+    /// <summary>快速命令 / 快速路径（本窗口私有副本，改动后回写给 profile）。</summary>
+    private readonly QuickAccessOptions _quickAccess;
+    private readonly Action<QuickAccessOptions>? _persistQuickAccess;
+
     private ITerminalSession? _session;
     private CancellationTokenSource? _connectCts;
     private bool _closing;
@@ -50,18 +58,28 @@ public partial class TerminalWindow : Window
     private int _lastColumns = 100;
     private int _lastRows = 30;
 
+    /// <summary>面板当前显示的是路径（true）还是命令（false）。</summary>
+    private bool _quickPanelShowsPaths;
+
     private TerminalWindow(
         string targetLabel,
         string workingDirectory,
         Func<int, int, CancellationToken, Task<ITerminalSession>> connectAsync,
-        bool isRemoteSession)
+        bool isRemoteSession,
+        QuickAccessOptions? quickAccess,
+        Action<QuickAccessOptions>? persistQuickAccess)
     {
         InitializeComponent();
+
+        // 终端窗口整体是深色底，标题栏一并切成深色
+        SourceInitialized += (_, _) => DarkTitleBar.Apply(this);
 
         _targetLabel = targetLabel;
         _workingDirectory = workingDirectory;
         _connectAsync = connectAsync;
         _isRemoteSession = isRemoteSession;
+        _quickAccess = quickAccess?.Clone() ?? new QuickAccessOptions();
+        _persistQuickAccess = persistQuickAccess;
 
         Title = $"终端 — {targetLabel}";
         TargetText.Text = targetLabel;
@@ -74,21 +92,38 @@ public partial class TerminalWindow : Window
         Closed += OnWindowClosed;
     }
 
+    /// <summary>本会话使用的快速路径列表：本地终端看 LocalPaths，远端终端看 RemotePaths。</summary>
+    private List<string> QuickPaths =>
+        _isRemoteSession
+            ? _quickAccess.RemotePaths ??= new List<string>()
+            : _quickAccess.LocalPaths ??= new List<string>();
+
     /// <summary>远端终端：SSH PTY，连上后自动 cd 到文件页当前目录。</summary>
-    public static TerminalWindow ForRemote(SyncProfile profile, string workingDirectory) =>
+    public static TerminalWindow ForRemote(
+        SyncProfile profile,
+        string workingDirectory,
+        Action<QuickAccessOptions>? persistQuickAccess = null) =>
         new(
             SshShellSession.Label(profile),
             workingDirectory,
             (columns, rows, token) => ConnectRemoteAsync(profile, columns, rows, token),
-            isRemoteSession: true);
+            isRemoteSession: true,
+            profile.QuickAccess,
+            persistQuickAccess);
 
     /// <summary>本地终端：ConPTY，工作目录在进程启动参数里指定，不需要再发 cd。</summary>
-    public static TerminalWindow ForLocal(string workingDirectory, string? shellPreference = null) =>
+    public static TerminalWindow ForLocal(
+        string workingDirectory,
+        string? shellPreference = null,
+        QuickAccessOptions? quickAccess = null,
+        Action<QuickAccessOptions>? persistQuickAccess = null) =>
         new(
             "本地终端",
             workingDirectory,
             (columns, rows, token) => ConnectLocalAsync(workingDirectory, shellPreference, columns, rows, token),
-            isRemoteSession: false);
+            isRemoteSession: false,
+            quickAccess,
+            persistQuickAccess);
 
     private static async Task<ITerminalSession> ConnectRemoteAsync(
         SyncProfile profile,
@@ -163,7 +198,9 @@ public partial class TerminalWindow : Window
         settings.AreBrowserAcceleratorKeysEnabled = false;
         settings.IsStatusBarEnabled = false;
         settings.IsZoomControlEnabled = false;
-        settings.AreDefaultContextMenusEnabled = true;
+        // 关掉 WebView2 自带的右键菜单（表情符号 / 剪切 / 复制 / 粘贴…）：
+        // 右键由 app.js 拦截，实现「有选中内容则复制，否则直接粘贴」
+        settings.AreDefaultContextMenusEnabled = false;
         settings.AreDevToolsEnabled = true;
         settings.IsWebMessageEnabled = true;
 
@@ -220,6 +257,19 @@ public partial class TerminalWindow : Window
 
                 break;
 
+            case "paste":
+                PasteFromClipboard();
+                break;
+
+            case "copy":
+                if (root.TryGetProperty("text", out var copyElement) &&
+                    copyElement.GetString() is { Length: > 0 } copyText)
+                {
+                    CopyToClipboard(copyText);
+                }
+
+                break;
+
             case "resize":
                 var cols = ReadInt(root, "cols", _lastColumns);
                 var rows = ReadInt(root, "rows", _lastRows);
@@ -239,6 +289,44 @@ public partial class TerminalWindow : Window
         root.TryGetProperty(name, out var element) && element.TryGetInt32(out var value) && value > 0
             ? value
             : fallback;
+
+    /// <summary>
+    /// 右键粘贴：剪贴板由宿主读取，避免 WebView2 的剪贴板权限提示；
+    /// 内容回传给前端后交给 xterm 的 paste，仍走正常的输入通道。
+    /// </summary>
+    private void PasteFromClipboard()
+    {
+        string text;
+        try
+        {
+            text = Clipboard.ContainsText() ? Clipboard.GetText() : string.Empty;
+        }
+        catch (Exception ex) when (ex is System.Runtime.InteropServices.ExternalException or InvalidOperationException)
+        {
+            Log.Debug(ex, "读取剪贴板失败");
+            return;
+        }
+
+        if (text.Length > 0)
+        {
+            PostToWeb(new { type = "paste", text });
+        }
+    }
+
+    /// <summary>右键复制：写回系统剪贴板（前端 navigator.clipboard 在 WebView2 中可能受权限限制）。</summary>
+    private void CopyToClipboard(string text)
+    {
+        try
+        {
+            Clipboard.SetText(text);
+        }
+        catch (Exception ex) when (ex is System.Runtime.InteropServices.ExternalException
+                                       or ArgumentException
+                                       or InvalidOperationException)
+        {
+            Log.Debug(ex, "写入剪贴板失败");
+        }
+    }
 
     private async Task ConnectAsync(int columns, int rows)
     {
@@ -341,6 +429,258 @@ public partial class TerminalWindow : Window
 
     /// <summary>POSIX 单引号转义：路径中的单引号写成 '\'' 形式。</summary>
     private static string QuotePosix(string path) => "'" + path.Replace("'", "'\\''", StringComparison.Ordinal) + "'";
+
+    // ── 快速命令 / 快速路径 ────────────────────────────────────────────────
+    // 面板放在顶栏下方独立一行（不用 Popup）：WebView2 是 HWND 宿主控件，浮层会被遮挡。
+
+    private void OnToggleQuickCommands(object sender, RoutedEventArgs e)
+    {
+        if (QuickCommandButton.IsChecked == true)
+        {
+            ShowQuickPanel(showPaths: false);
+        }
+        else
+        {
+            HideQuickPanel();
+        }
+    }
+
+    private void OnToggleQuickPaths(object sender, RoutedEventArgs e)
+    {
+        if (QuickPathButton.IsChecked == true)
+        {
+            ShowQuickPanel(showPaths: true);
+        }
+        else
+        {
+            HideQuickPanel();
+        }
+    }
+
+    private void OnCloseQuickPanel(object sender, RoutedEventArgs e) => HideQuickPanel();
+
+    private void ShowQuickPanel(bool showPaths)
+    {
+        _quickPanelShowsPaths = showPaths;
+        QuickCommandButton.IsChecked = !showPaths;
+        QuickPathButton.IsChecked = showPaths;
+
+        QuickPanelTitle.Text = showPaths
+            ? (_isRemoteSession ? "快速路径 · 远端" : "快速路径 · 本地")
+            : "快速命令";
+        QuickAddButton.Content = showPaths ? "＋ 添加路径" : "＋ 添加命令";
+        QuickPanel.Visibility = Visibility.Visible;
+
+        RefreshQuickPanel();
+    }
+
+    private void HideQuickPanel()
+    {
+        QuickPanel.Visibility = Visibility.Collapsed;
+        QuickCommandButton.IsChecked = false;
+        QuickPathButton.IsChecked = false;
+    }
+
+    private void RefreshQuickPanel()
+    {
+        var showPaths = _quickPanelShowsPaths;
+        var items = (showPaths ? QuickPaths : _quickAccess.Commands) ?? new List<string>();
+
+        QuickItemList.ItemsSource = items.Select(text => new QuickItem(text)).ToArray();
+
+        QuickEmptyText.Text = showPaths
+            ? (_isRemoteSession
+                ? "还没有快速路径：点「添加路径」填一个远端目录，选中后终端会 cd 过去。"
+                : "还没有快速路径：点「添加路径」挑一个本地目录，选中后终端会 cd 过去。")
+            : "还没有快速命令：点「添加命令」写下要发送的内容，选中即发送到终端。";
+        QuickEmptyText.Visibility = items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>选中一条：命令原样发送，路径做一次 cd（回车符由会话按平台补齐）。</summary>
+    private void OnQuickItemClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: QuickItem item })
+        {
+            return;
+        }
+
+        if (_session is null)
+        {
+            HideQuickPanel();
+            Notify("终端尚未连接，快速入口暂不可用。", NoticeColor.Hint);
+            return;
+        }
+
+        var showPaths = _quickPanelShowsPaths;
+        try
+        {
+            if (showPaths)
+            {
+                _session.SendCommand(_isRemoteSession
+                    ? $"cd {QuotePosix(item.Text)}"
+                    : $"cd \"{item.Text}\"");
+            }
+            else
+            {
+                _session.SendCommand(item.Text);
+            }
+
+            Log.Debug("快速入口已发送：{Kind} {Text}", showPaths ? "路径" : "命令", item.Text);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "快速入口发送失败");
+            Notify($"发送失败：{ex.Message}", NoticeColor.Error);
+        }
+
+        HideQuickPanel();
+        PostToWeb(new { type = "focus" });
+    }
+
+    private void OnQuickRemoveClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: QuickItem item })
+        {
+            return;
+        }
+
+        var list = _quickPanelShowsPaths ? QuickPaths : _quickAccess.Commands;
+        if (list is null || !list.Remove(item.Text))
+        {
+            return;
+        }
+
+        PersistQuickAccess();
+        RefreshQuickPanel();
+    }
+
+    private void OnQuickAdd(object sender, RoutedEventArgs e)
+    {
+        if (_quickPanelShowsPaths)
+        {
+            AddQuickPath();
+        }
+        else
+        {
+            AddQuickCommand();
+        }
+    }
+
+    private void AddQuickCommand()
+    {
+        var dialog = new TextInputWindow(
+            "添加快速命令",
+            "命令会原样发送到终端（相当于输入后回车），例如 docker compose ps",
+            string.Empty)
+        {
+            Owner = this,
+            Validate = ValidateQuickCommand,
+        };
+
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        (_quickAccess.Commands ??= new List<string>()).Add(dialog.Value);
+        PersistQuickAccess();
+        RefreshQuickPanel();
+    }
+
+    private string? ValidateQuickCommand(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "命令不能为空";
+        }
+
+        if (value.IndexOfAny(['\r', '\n']) >= 0)
+        {
+            return "命令不能包含换行";
+        }
+
+        return _quickAccess.Commands is not null && _quickAccess.Commands.Contains(value, StringComparer.Ordinal)
+            ? "该命令已在列表中"
+            : null;
+    }
+
+    private void AddQuickPath()
+    {
+        string value;
+        if (_isRemoteSession)
+        {
+            var initial = _workingDirectory.StartsWith('/') ? _workingDirectory : "/";
+            var dialog = new TextInputWindow("添加快速路径", "远端目录（Linux 绝对路径）", initial)
+            {
+                Owner = this,
+                Validate = ValidateQuickPath,
+            };
+
+            if (dialog.ShowDialog() != true)
+            {
+                return;
+            }
+
+            value = dialog.Value;
+        }
+        else
+        {
+            var dialog = new OpenFolderDialog { Title = "选择要加入快速路径的目录" };
+            if (Directory.Exists(_workingDirectory))
+            {
+                dialog.InitialDirectory = _workingDirectory;
+            }
+
+            if (dialog.ShowDialog(this) != true)
+            {
+                return;
+            }
+
+            value = dialog.FolderName;
+        }
+
+        QuickPaths.Add(value);
+        PersistQuickAccess();
+        RefreshQuickPanel();
+    }
+
+    private string? ValidateQuickPath(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "路径不能为空";
+        }
+
+        if (!value.StartsWith('/'))
+        {
+            return "远端路径必须以 / 开头";
+        }
+
+        if (value.IndexOfAny(['\r', '\n']) >= 0)
+        {
+            return "路径不能包含换行";
+        }
+
+        return QuickPaths.Contains(value, StringComparer.Ordinal) ? "该路径已在列表中" : null;
+    }
+
+    private void PersistQuickAccess()
+    {
+        if (_persistQuickAccess is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _persistQuickAccess(_quickAccess);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "保存快速命令 / 快速路径失败");
+            Notify($"保存快速入口失败：{ex.Message}", NoticeColor.Error);
+        }
+    }
 
     private async Task PumpOutputAsync(ITerminalSession session)
     {
@@ -535,4 +875,10 @@ public partial class TerminalWindow : Window
             Log.Debug("已关闭最后一个终端窗口，释放 WebView2 共享环境");
         }
     }
+}
+
+/// <summary>快速入口面板的一行（ItemsControl 的数据项，全文即内容）。</summary>
+internal sealed class QuickItem(string text)
+{
+    public string Text { get; } = text;
 }

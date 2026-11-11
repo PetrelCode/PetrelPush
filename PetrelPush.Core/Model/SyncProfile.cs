@@ -11,6 +11,12 @@ public sealed class SyncProfile
 
     public string ProfileName { get; set; } = string.Empty;
 
+    /// <summary>
+    /// 连接是否启用。禁用后不启动同步引擎（也不占用远端连接），配置、凭据与快照状态原样保留。
+    /// 多连接时由「配置 · 连接」卡片逐条控制。
+    /// </summary>
+    public bool Enabled { get; set; } = true;
+
     public string LocalRoot { get; set; } = string.Empty;
 
     public RemoteOptions Remote { get; set; } = new();
@@ -18,6 +24,9 @@ public sealed class SyncProfile
     public string RemoteRoot { get; set; } = string.Empty;
 
     public SyncOptions Sync { get; set; } = new();
+
+    /// <summary>终端窗口顶部「快速命令 / 快速路径」菜单的条目。</summary>
+    public QuickAccessOptions QuickAccess { get; set; } = new();
 
     public RetryOptions Retry { get; set; } = new();
 
@@ -140,6 +149,26 @@ public sealed class RemoteOptions
     /// <summary>SHA256:xxxx 形式的主机指纹；为空表示尚未完成 TOFU 确认。</summary>
     public string? HostKeyFingerprint { get; set; }
 
+    /// <summary>
+    /// 确认该指纹时绑定的远端地址（host:port）。远端地址变更（改 IP / 换端口）后旧指纹自动作废，
+    /// 需要重新「测试连接」确认，避免换了主机却还在比对上一台的指纹。
+    /// </summary>
+    public string? HostKeyTarget { get; set; }
+
+    /// <summary>当前远端地址对应的指纹绑定标识。</summary>
+    [JsonIgnore]
+    public string CurrentHostKeyTarget => BuildHostKeyTarget(Host, Port);
+
+    /// <summary>指纹已确认且仍与当前远端地址匹配。</summary>
+    [JsonIgnore]
+    public bool HasConfirmedHostKey =>
+        !string.IsNullOrWhiteSpace(HostKeyFingerprint)
+        && string.Equals(HostKeyTarget, CurrentHostKeyTarget, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>指纹绑定标识：host:port（host 去空格、不区分大小写）。</summary>
+    public static string BuildHostKeyTarget(string host, int port) =>
+        $"{(host ?? string.Empty).Trim().ToLowerInvariant()}:{port}";
+
     public int ConnectTimeoutMs { get; set; } = 10000;
 
     public int KeepAliveIntervalSec { get; set; } = 15;
@@ -199,6 +228,30 @@ public sealed class SyncOptions
 
     /// <summary>只计算并展示变更集，不做任何远端写入（首次验收用）。</summary>
     public bool DryRun { get; set; }
+}
+
+/// <summary>
+/// 终端窗口顶部「快速命令 / 快速路径」的条目，随 profile 保存在 config.json。
+/// 命令只有一份（本地与远端终端共用）；路径按本地 / 远端分开，
+/// 因为 Windows 路径在 SSH 会话里没有意义，反之亦然。
+/// </summary>
+public sealed class QuickAccessOptions
+{
+    /// <summary>快速命令：选中后原样发送到终端（相当于输入后回车）。</summary>
+    public List<string> Commands { get; set; } = new();
+
+    /// <summary>本地终端的快速路径（Windows 绝对路径，选中后 cd 过去）。</summary>
+    public List<string> LocalPaths { get; set; } = new();
+
+    /// <summary>远端终端的快速路径（Linux 绝对路径，选中后 cd 过去）。</summary>
+    public List<string> RemotePaths { get; set; } = new();
+
+    public QuickAccessOptions Clone() => new()
+    {
+        Commands = new List<string>(Commands ?? new List<string>()),
+        LocalPaths = new List<string>(LocalPaths ?? new List<string>()),
+        RemotePaths = new List<string>(RemotePaths ?? new List<string>()),
+    };
 }
 
 public sealed class RetryOptions

@@ -188,6 +188,12 @@ public sealed class SftpConnectionPool : IAsyncDisposable
                 + "若使用 root + 密码，请确认 PermitRootLogin yes、PasswordAuthentication yes 且 root 密码未被锁定。",
                 ex);
         }
+        catch (SshConnectionException ex) when (_validator.Mismatch && _validator.Failure is not null)
+        {
+            // 同一地址上指纹变了：交给调用方决定是否让用户确认覆盖，不能自动信任
+            client.Dispose();
+            throw new HostKeyMismatchException(_validator.Failure, ex);
+        }
         catch (SshConnectionException ex) when (_validator.Failure is not null)
         {
             client.Dispose();

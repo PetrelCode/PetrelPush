@@ -25,8 +25,8 @@ public sealed class SftpTransferExecutor : ITransferExecutor
     public SftpTransferExecutor(SyncProfile profile, ILogger logger, int? poolSize = null)
     {
         _logger = logger;
-        var validator = new HostKeyValidator(profile.Remote.HostKeyFingerprint);
-        validator.FingerprintAccepted += fingerprint => HostKeyTrusted?.Invoke(fingerprint);
+        var validator = new HostKeyValidator(profile.Remote);
+        validator.FingerprintAccepted += trust => HostKeyTrusted?.Invoke(trust);
         _pool = new SftpConnectionPool(
             profile.Remote,
             profile.Remote.Password,
@@ -36,7 +36,7 @@ public sealed class SftpTransferExecutor : ITransferExecutor
     }
 
     /// <summary>首次连接（测试连接）确认的主机指纹，调用方应写回配置。</summary>
-    public event Action<string>? HostKeyTrusted;
+    public event Action<HostKeyTrust>? HostKeyTrusted;
 
     /// <summary>上传字节进度：目标相对路径、已上传字节、文件总字节。</summary>
     public event Action<string, long, long>? UploadProgress;
@@ -64,10 +64,21 @@ public sealed class SftpTransferExecutor : ITransferExecutor
         }
     }
 
-    public async Task TestConnectionAsync(SyncProfile profile, CancellationToken cancellationToken)
+    public Task TestConnectionAsync(SyncProfile profile, CancellationToken cancellationToken)
+        => TestConnectionAsync(profile, cancellationToken, trustNewHostKey: false);
+
+    /// <summary>
+    /// 测试连接。首次连接与远端地址变更后的连接会接受并记录指纹；
+    /// <paramref name="trustNewHostKey"/> 仅在同地址指纹变化且用户已显式确认时传 true。
+    /// </summary>
+    public async Task TestConnectionAsync(
+        SyncProfile profile,
+        CancellationToken cancellationToken,
+        bool trustNewHostKey)
     {
         var validator = _pool.Validator;
         validator.TrustOnFirstUse = true;
+        validator.AllowFingerprintRotation = trustNewHostKey;
         try
         {
             using var lease = await _pool.AcquireAsync(cancellationToken).ConfigureAwait(false);
@@ -101,6 +112,7 @@ public sealed class SftpTransferExecutor : ITransferExecutor
         finally
         {
             validator.TrustOnFirstUse = false;
+            validator.AllowFingerprintRotation = false;
         }
     }
 

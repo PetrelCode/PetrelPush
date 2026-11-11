@@ -106,11 +106,27 @@
     if (event.ctrlKey && event.shiftKey && event.code === 'KeyC') {
       var selection = term.getSelection();
       if (selection) {
-        navigator.clipboard.writeText(selection).catch(function () { });
+        term.clearSelection();
+        post({ type: 'copy', text: selection });
         return false;
       }
     }
     return true;
+  });
+
+  // 右键：有选中内容时复制并清除选区，否则直接把剪贴板内容粘贴到终端。
+  // WebView2 自带的右键菜单已在宿主侧关闭，这里统一接管。
+  container.addEventListener('contextmenu', function (event) {
+    event.preventDefault();
+
+    var selection = term.getSelection();
+    if (selection) {
+      term.clearSelection();
+      post({ type: 'copy', text: selection });
+      return;
+    }
+
+    post({ type: 'paste' });
   });
 
   if (bridge) {
@@ -139,6 +155,14 @@
 
       if (message.type === 'state') {
         awaitingRetry = message.value === 'failed';
+        return;
+      }
+
+      if (message.type === 'paste') {
+        if (typeof message.text === 'string' && message.text.length > 0) {
+          // 交给 xterm 处理换行规范化，再经 onData 发往 shell
+          term.paste(message.text);
+        }
         return;
       }
 

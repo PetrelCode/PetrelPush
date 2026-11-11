@@ -94,11 +94,12 @@ internal static class Program
         var state = new SqliteStateStore(store.GetStateDatabasePath(profile.ProfileId), logger);
         await state.InitializeAsync(CancellationToken.None).ConfigureAwait(false);
         await using var transport = new SftpTransferExecutor(profile, logger);
-        transport.HostKeyTrusted += fingerprint =>
+        transport.HostKeyTrusted += trust =>
         {
-            profile.Remote.HostKeyFingerprint = fingerprint;
+            profile.Remote.HostKeyFingerprint = trust.Fingerprint;
+            profile.Remote.HostKeyTarget = trust.Target;
             store.Save(profile);
-            logger.Information("已固定主机指纹 {Fingerprint}", fingerprint);
+            logger.Information("已固定主机指纹 {Fingerprint}（{Target}）", trust.Fingerprint, trust.Target);
         };
 
         var deep = options.ContainsKey("deep");
@@ -190,14 +191,25 @@ internal static class Program
         var logger = CreateLogger(store, profile);
 
         await using var transport = new SftpTransferExecutor(profile, logger);
-        transport.HostKeyTrusted += fingerprint =>
+        transport.HostKeyTrusted += trust =>
         {
-            profile.Remote.HostKeyFingerprint = fingerprint;
+            profile.Remote.HostKeyFingerprint = trust.Fingerprint;
+            profile.Remote.HostKeyTarget = trust.Target;
             store.Save(profile);
-            Console.WriteLine($"已固定主机指纹：{fingerprint}");
+            Console.WriteLine($"已固定主机指纹：{trust.Fingerprint}（{trust.Target}）");
         };
 
-        await transport.TestConnectionAsync(profile, CancellationToken.None).ConfigureAwait(false);
+        try
+        {
+            await transport.TestConnectionAsync(profile, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (HostKeyMismatchException ex)
+        {
+            Console.Error.WriteLine($"失败：{ex.Message}");
+            Console.Error.WriteLine("如确认远端主机已重装或更换密钥，请删除配置中的 hostKeyFingerprint / hostKeyTarget 后重试。");
+            return 1;
+        }
+
         Console.WriteLine("连接测试成功。");
         return 0;
     }

@@ -18,7 +18,6 @@ public sealed class SyncHost : IAsyncDisposable
     public const int RemoteListLimit = 2000;
 
     private readonly ProfileStore _store;
-    private readonly ILogger _logger;
     private readonly SemaphoreSlim _lifecycle = new(1, 1);
 
     private SyncProfile _profile;
@@ -28,12 +27,17 @@ public sealed class SyncHost : IAsyncDisposable
     private SyncEngine? _engine;
     private bool _disposed;
 
-    public SyncHost(ProfileStore store, SyncProfile profile, ILogger logger)
+    public SyncHost(ProfileStore store, SyncProfile profile)
     {
         _store = store;
         _profile = profile;
-        _logger = logger;
     }
+
+    /// <summary>
+    /// 日志统一带 <c>Connection</c> 上下文（连接名），界面上每行都能看出属于哪条连接；
+    /// 每次写日志时按当前连接名取上下文，改名后无需重建宿主。
+    /// </summary>
+    private ILogger _logger => Log.ForContext("Connection", DisplayName);
 
     public event EventHandler<EngineStatus>? StatusChanged;
 
@@ -44,6 +48,14 @@ public sealed class SyncHost : IAsyncDisposable
 
     public SyncProfile Profile => _profile;
 
+    /// <summary>连接在界面上的展示名：优先配置名称，缺失时退回 id。</summary>
+    public string DisplayName => string.IsNullOrWhiteSpace(_profile.ProfileName)
+        ? _profile.ProfileId
+        : _profile.ProfileName;
+
+    /// <summary>连接下拉框里的显示文本：名称 + 启用状态，便于一眼看出哪些连接在运行。</summary>
+    public string ListDisplayName => $"{DisplayName}（{(_profile.Enabled ? "已启用" : "已禁用")}）";
+
     public EngineStatus Status => _engine?.Status ?? EngineStatus.Stopped;
 
     public bool IsPaused => _engine?.IsPaused ?? false;
@@ -53,6 +65,12 @@ public sealed class SyncHost : IAsyncDisposable
         await _lifecycle.WaitAsync().ConfigureAwait(true);
         try
         {
+            // 已禁用的连接不启动引擎，配置与快照仍保留在磁盘上
+            if (!_profile.Enabled)
+            {
+                return;
+            }
+
             await StartCoreAsync().ConfigureAwait(true);
         }
         finally
@@ -68,6 +86,15 @@ public sealed class SyncHost : IAsyncDisposable
         {
             await StopCoreAsync().ConfigureAwait(true);
             _profile = profile;
+
+            if (!profile.Enabled)
+            {
+                StatusChanged?.Invoke(
+                    this,
+                    new EngineStatus(EnginePhase.Stopped, null, null, 0, 0, "连接已禁用"));
+                return;
+            }
+
             await StartCoreAsync().ConfigureAwait(true);
         }
         finally
@@ -114,23 +141,32 @@ public sealed class SyncHost : IAsyncDisposable
         _store.Save(profile, password);
         await RestartAsync(profile).ConfigureAwait(true);
     }
-    /// <summary>远端浏览是否可用：连接已建立，且主机指纹已完成确认。</summary>
-    public bool CanBrowseRemote =>
-        _browser is not null && !string.IsNullOrWhiteSpace(_profile.Remote.HostKeyFingerprint);
+    /// <summary>远端浏览是否可用：连接已建立，且主机指纹已完成确认并与当前远端地址匹配。</summary>
+    public bool CanBrowseRemote => _browser is not null && _profile.Remote.HasConfirmedHostKey;
 
     /// <summary>远端浏览不可用时的原因说明；可用时返回 null。</summary>
     public string? RemoteBrowseHint
     {
         get
         {
+            if (!_profile.Enabled)
+            {
+                return "该连接已禁用：请在「配置 · 连接」卡片勾选「启用此连接」后重试";
+            }
+
             if (_browser is null)
             {
                 return "远端连接未就绪：请先在「配置」页填写完整配置并保存";
             }
 
-            return string.IsNullOrWhiteSpace(_profile.Remote.HostKeyFingerprint)
-                ? "主机指纹尚未确认：请先在「配置」页点「测试连接」"
-                : null;
+            if (string.IsNullOrWhiteSpace(_profile.Remote.HostKeyFingerprint))
+            {
+                return "主机指纹尚未确认：请先在「配置」页点「测试连接」";
+            }
+
+            return _profile.Remote.HasConfirmedHostKey
+                ? null
+                : "远端地址已变更：请先在「配置」页点「测试连接」重新确认主机指纹";
         }
     }
 
@@ -205,11 +241,21 @@ public sealed class SyncHost : IAsyncDisposable
 
     private SftpTransferExecutor RequireBrowser()
     {
+        if (!_profile.Enabled)
+        {
+            throw new InvalidOperationException("该连接已禁用：请在「配置 · 连接」卡片勾选「启用此连接」后重试");
+        }
+
         var browser = _browser
                       ?? throw new InvalidOperationException("远端连接未就绪：请先在「配置」页填写完整配置并保存");
         if (string.IsNullOrWhiteSpace(_profile.Remote.HostKeyFingerprint))
         {
             throw new InvalidOperationException("主机指纹尚未确认：请先在「配置」页点「测试连接」");
+        }
+
+        if (!_profile.Remote.HasConfirmedHostKey)
+        {
+            throw new InvalidOperationException("远端地址已变更，主机指纹需重新确认：请先在「配置」页点「测试连接」");
         }
 
         return browser;
@@ -218,20 +264,28 @@ public sealed class SyncHost : IAsyncDisposable
     /// <summary>
     /// 测试连接：保存配置并用临时连接完成 TOFU 指纹确认，返回（可能新固定的）主机指纹。
     /// 调用方确认成功后再 <see cref="RestartAsync"/>，让引擎使用已确认指纹的新配置。
+    /// <paramref name="trustNewHostKey"/> 仅在同一地址指纹变化且用户已显式确认时传 true。
     /// </summary>
-    public async Task<string?> TestConnectionAsync(SyncProfile profile, string? password)
+    public async Task<string?> TestConnectionAsync(
+        SyncProfile profile,
+        string? password,
+        bool trustNewHostKey = false)
     {
         _store.Save(profile, password);
 
         await using var temporary = new SftpTransferExecutor(profile, _logger);
-        temporary.HostKeyTrusted += fingerprint =>
+        temporary.HostKeyTrusted += trust =>
         {
-            profile.Remote.HostKeyFingerprint = fingerprint;
+            profile.Remote.HostKeyFingerprint = trust.Fingerprint;
+            profile.Remote.HostKeyTarget = trust.Target;
             _store.Save(profile);
-            _logger.Information("已固定远端主机指纹 {Fingerprint}", HostKeyValidator.Mask(fingerprint));
+            _logger.Information(
+                "已固定远端主机指纹 {Fingerprint}（{Target}）",
+                HostKeyValidator.Mask(trust.Fingerprint),
+                trust.Target);
         };
 
-        await temporary.TestConnectionAsync(profile, CancellationToken.None).ConfigureAwait(true);
+        await temporary.TestConnectionAsync(profile, CancellationToken.None, trustNewHostKey).ConfigureAwait(true);
         return profile.Remote.HostKeyFingerprint;
     }
 
@@ -302,13 +356,17 @@ public sealed class SyncHost : IAsyncDisposable
         }
     }
 
-    private void OnHostKeyTrusted(string fingerprint)
+    private void OnHostKeyTrusted(HostKeyTrust trust)
     {
-        _profile.Remote.HostKeyFingerprint = fingerprint;
+        _profile.Remote.HostKeyFingerprint = trust.Fingerprint;
+        _profile.Remote.HostKeyTarget = trust.Target;
         try
         {
             _store.Save(_profile);
-            _logger.Information("已固定远端主机指纹 {Fingerprint}", HostKeyValidator.Mask(fingerprint));
+            _logger.Information(
+                "已固定远端主机指纹 {Fingerprint}（{Target}）",
+                HostKeyValidator.Mask(trust.Fingerprint),
+                trust.Target);
         }
         catch (Exception ex)
         {

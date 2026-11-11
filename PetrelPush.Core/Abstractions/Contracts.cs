@@ -6,7 +6,7 @@ namespace PetrelPush.Core.Abstractions;
 public sealed record TransferOutcome(byte[]? Hash, EntryKind Kind);
 
 /// <summary>不可恢复的错误（认证失败、配置错误）：不重试，直接告警。</summary>
-public sealed class SyncFatalException : Exception
+public class SyncFatalException : Exception
 {
     public SyncFatalException(string message, Exception? inner = null)
         : base(message, inner)

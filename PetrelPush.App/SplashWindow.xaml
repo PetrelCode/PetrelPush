@@ -85,11 +85,11 @@
 
     <Grid>
         <Grid.Background>
-            <!-- radial-gradient(120% 110% at 50% 0%, #f9f0ff 0%, #f5f5f7 62%) -->
+            <!-- 顶部一层淡紫晕开，与主界面底色（#F4F2F8）衔接 -->
             <RadialGradientBrush Center="0.5,0" GradientOrigin="0.5,0" RadiusX="1.2" RadiusY="1.1">
-                <GradientStop Color="#F6EEFE" Offset="0" />
-                <GradientStop Color="#F7F5FB" Offset="0.62" />
-                <GradientStop Color="#F7F5FB" Offset="1" />
+                <GradientStop Color="#F4ECFD" Offset="0" />
+                <GradientStop Color="#F4F2F8" Offset="0.62" />
+                <GradientStop Color="#F4F2F8" Offset="1" />
             </RadialGradientBrush>
         </Grid.Background>
 
@@ -115,7 +115,8 @@
         <!-- 中央：产品名 + 版本徽标 -->
         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
             <TextBlock x:Name="NameText" Text="PetrelPush"
-                       FontSize="24" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}"
+                       FontFamily="{StaticResource DisplayFont}"
+                       FontSize="26" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}"
                        HorizontalAlignment="Center" Opacity="0">
                 <TextBlock.RenderTransform>
                     <TranslateTransform x:Name="NameTransform" Y="6" />
@@ -129,7 +130,7 @@
                 <Border.RenderTransform>
                     <TranslateTransform x:Name="EditionTransform" Y="6" />
                 </Border.RenderTransform>
-                <TextBlock x:Name="VersionBadge" Text="v0.3.0"
+                <TextBlock x:Name="VersionBadge" Text="v0.4.0"
                            FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource BrandBrush}" />
             </Border>
         </StackPanel>
@@ -141,8 +142,8 @@
                 <Border Width="70.56" Height="4" CornerRadius="2" HorizontalAlignment="Left">
                     <Border.Background>
                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                            <GradientStop Color="#B37FEB" Offset="0" />
-                            <GradientStop Color="#9254DE" Offset="1" />
+                            <GradientStop Color="#6D3FD1" Offset="0" />
+                            <GradientStop Color="#5B2FC4" Offset="1" />
                         </LinearGradientBrush>
                     </Border.Background>
                     <Border.RenderTransform>

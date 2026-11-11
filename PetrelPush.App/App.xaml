@@ -2,36 +2,63 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Application.Resources>
-        <!-- 品牌主题：主色 #9254DE -->
-        <SolidColorBrush x:Key="BrandBrush" Color="#9254DE" />
-        <SolidColorBrush x:Key="BrandHoverBrush" Color="#8443D6" />
-        <SolidColorBrush x:Key="BrandPressedBrush" Color="#7333C6" />
-        <SolidColorBrush x:Key="BrandSoftBrush" Color="#F3EDFC" />
-        <SolidColorBrush x:Key="BrandBorderBrush" Color="#DCCDF7" />
+        <!--
+          品牌主题：深海夜航。
+          深紫顶栏（与紫色品牌图标同源）+ 暖灰白工作区，重点色只出现在品牌、选中与主按钮上。
+          紫色不铺满界面，避免落入「紫渐变白底」的通用观感。
+        -->
+        <SolidColorBrush x:Key="BrandBrush" Color="#5B2FC4" />
+        <SolidColorBrush x:Key="BrandHoverBrush" Color="#6D3FD1" />
+        <SolidColorBrush x:Key="BrandPressedBrush" Color="#4A22A8" />
+        <SolidColorBrush x:Key="BrandSoftBrush" Color="#F1EBFE" />
+        <SolidColorBrush x:Key="BrandBorderBrush" Color="#D9CBF8" />
 
-        <SolidColorBrush x:Key="PageBackgroundBrush" Color="#F7F5FB" />
+        <!-- 顶栏「深海」渐变的三档色：起点、终点、分隔线 -->
+        <SolidColorBrush x:Key="BrandDeepBrush" Color="#17102A" />
+        <SolidColorBrush x:Key="BrandDeepEndBrush" Color="#2A1A4E" />
+        <SolidColorBrush x:Key="BrandDeepLineBrush" Color="#3A2A63" />
+        <!-- 顶栏底纹：从左到右略微提亮的斜向渐变，比纯色更有纵深 -->
+        <LinearGradientBrush x:Key="HeaderSurfaceBrush" StartPoint="0,0" EndPoint="1,0.45">
+            <GradientStop Color="#17102A" Offset="0" />
+            <GradientStop Color="#2A1A4E" Offset="1" />
+        </LinearGradientBrush>
+        <SolidColorBrush x:Key="OnDarkBrush" Color="#F6F3FF" />
+        <SolidColorBrush x:Key="OnDarkMutedBrush" Color="#B4A4D6" />
+        <!-- 深色顶栏上的状态胶囊：半透明白底 + 亮色文字，由代码切换文字色 -->
+        <SolidColorBrush x:Key="BadgeSurfaceBrush" Color="#26FFFFFF" />
+        <SolidColorBrush x:Key="BadgeSuccessBrush" Color="#6EE7B0" />
+        <SolidColorBrush x:Key="BadgeWarningBrush" Color="#F3C169" />
+        <SolidColorBrush x:Key="BadgeErrorBrush" Color="#FF9E93" />
+        <SolidColorBrush x:Key="BadgeIdleBrush" Color="#B8A9D8" />
+
+        <SolidColorBrush x:Key="PageBackgroundBrush" Color="#F4F2F8" />
         <SolidColorBrush x:Key="SurfaceBrush" Color="#FFFFFF" />
-        <SolidColorBrush x:Key="SoftBorderBrush" Color="#EAE4F4" />
+        <SolidColorBrush x:Key="SoftBorderBrush" Color="#E5DFF2" />
         <!-- 浅底容器：路径条、代码块、禁用态输入框 -->
-        <SolidColorBrush x:Key="SurfaceSubtleBrush" Color="#FAF8FD" />
+        <SolidColorBrush x:Key="SurfaceSubtleBrush" Color="#FBF9FE" />
         <!-- 同一色相的两级强度，避免悬停态与选中态撞色 -->
-        <SolidColorBrush x:Key="BrandSoftHoverBrush" Color="#F7F3FE" />
-        <SolidColorBrush x:Key="BrandSoftSelectedBrush" Color="#EDE4FB" />
+        <SolidColorBrush x:Key="BrandSoftHoverBrush" Color="#F7F2FE" />
+        <SolidColorBrush x:Key="BrandSoftSelectedBrush" Color="#EBE1FD" />
         <!-- 进度条底槽 -->
-        <SolidColorBrush x:Key="TrackBrush" Color="#EDE7F6" />
+        <SolidColorBrush x:Key="TrackBrush" Color="#ECE6FA" />
 
-        <SolidColorBrush x:Key="TextPrimaryBrush" Color="#241E33" />
-        <SolidColorBrush x:Key="TextSecondaryBrush" Color="#6E6780" />
-        <SolidColorBrush x:Key="TextMutedBrush" Color="#9C95AB" />
+        <SolidColorBrush x:Key="TextPrimaryBrush" Color="#1A1429" />
+        <SolidColorBrush x:Key="TextSecondaryBrush" Color="#5A526B" />
+        <SolidColorBrush x:Key="TextMutedBrush" Color="#928AA3" />
 
-        <SolidColorBrush x:Key="StateSuccessBrush" Color="#2E9E4F" />
-        <SolidColorBrush x:Key="StateSuccessSoftBrush" Color="#E9F7EE" />
-        <SolidColorBrush x:Key="StateWarningBrush" Color="#B7791F" />
-        <SolidColorBrush x:Key="StateWarningSoftBrush" Color="#FFF6E5" />
-        <SolidColorBrush x:Key="StateErrorBrush" Color="#D0342C" />
-        <SolidColorBrush x:Key="StateErrorSoftBrush" Color="#FDECEC" />
-        <SolidColorBrush x:Key="StateIdleBrush" Color="#7A7488" />
-        <SolidColorBrush x:Key="StateIdleSoftBrush" Color="#F1EFF6" />
+        <SolidColorBrush x:Key="StateSuccessBrush" Color="#16875A" />
+        <SolidColorBrush x:Key="StateSuccessSoftBrush" Color="#E3F4EB" />
+        <SolidColorBrush x:Key="StateWarningBrush" Color="#A6690A" />
+        <SolidColorBrush x:Key="StateWarningSoftBrush" Color="#FBF0DC" />
+        <SolidColorBrush x:Key="StateErrorBrush" Color="#C0392B" />
+        <SolidColorBrush x:Key="StateErrorSoftBrush" Color="#FAEAE8" />
+        <SolidColorBrush x:Key="StateIdleBrush" Color="#6B6478" />
+        <SolidColorBrush x:Key="StateIdleSoftBrush" Color="#F0EDF5" />
+
+        <!-- 字体：Bahnschrift 做品牌与数字（Windows 自带、几何感强），正文用雅黑 -->
+        <FontFamily x:Key="DisplayFont">Bahnschrift, Segoe UI</FontFamily>
+        <FontFamily x:Key="BodyFont">Microsoft YaHei UI, Segoe UI</FontFamily>
+        <FontFamily x:Key="MonoFont">Cascadia Mono, Consolas, Courier New</FontFamily>
 
         <!-- 不在此处固定前景色，便于标签页选中态、列表项等通过继承改变文字颜色 -->
         <Style TargetType="TextBlock">
@@ -45,7 +72,7 @@
             <Setter Property="Control.Template">
                 <Setter.Value>
                     <ControlTemplate>
-                        <Rectangle Margin="-3" RadiusX="9" RadiusY="9" SnapsToDevicePixels="True"
+                        <Rectangle Margin="-3" RadiusX="10" RadiusY="10" SnapsToDevicePixels="True"
                                    Stroke="{StaticResource BrandBrush}" StrokeThickness="1.4"
                                    StrokeDashArray="2 2" />
                     </ControlTemplate>
@@ -53,7 +80,7 @@
             </Setter>
         </Style>
 
-        <!-- 字号阶梯：11 元信息 · 12 次要说明 · 13 正文/卡片标题 · 14 区块标题 · 26 指标数字 -->
+        <!-- 字号阶梯：11 元信息 · 12 次要说明 · 13 正文/卡片标题 · 15 区块标题 · 26 指标数字 -->
         <Style x:Key="CardTitle" TargetType="TextBlock">
             <Setter Property="FontSize" Value="13" />
             <Setter Property="FontWeight" Value="SemiBold" />
@@ -79,8 +106,9 @@
         </Style>
 
         <Style x:Key="MetricValue" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="26" />
-            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="FontFamily" Value="{StaticResource DisplayFont}" />
+            <Setter Property="FontSize" Value="28" />
+            <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
             <Setter Property="VerticalAlignment" Value="Bottom" />
             <Setter Property="TextTrimming" Value="CharacterEllipsis" />
@@ -89,19 +117,19 @@
         <Style x:Key="FieldLabel" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
             <Setter Property="FontSize" Value="12" />
-            <Setter Property="Margin" Value="0,0,0,4" />
+            <Setter Property="Margin" Value="0,0,0,5" />
         </Style>
 
         <Style x:Key="Card" TargetType="Border">
             <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
             <Setter Property="BorderBrush" Value="{StaticResource SoftBorderBrush}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="12" />
-            <Setter Property="Padding" Value="16" />
+            <Setter Property="CornerRadius" Value="14" />
+            <Setter Property="Padding" Value="18" />
             <Setter Property="SnapsToDevicePixels" Value="True" />
         </Style>
 
-        <!-- 主按钮：品牌色实心 -->
+        <!-- 主按钮：品牌色实心，深一档的紫保证在浅底上够沉 -->
         <Style x:Key="PrimaryButton" TargetType="Button">
             <Setter Property="Foreground" Value="White" />
             <Setter Property="Background" Value="{StaticResource BrandBrush}" />
@@ -116,7 +144,7 @@
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="Bd"
                                 Background="{TemplateBinding Background}"
-                                CornerRadius="8"
+                                CornerRadius="9"
                                 Padding="{TemplateBinding Padding}"
                                 SnapsToDevicePixels="True">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -129,7 +157,7 @@
                                 <Setter TargetName="Bd" Property="Background" Value="{StaticResource BrandPressedBrush}" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Bd" Property="Background" Value="#CFC4E6" />
+                                <Setter TargetName="Bd" Property="Background" Value="#C9BCE4" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -154,7 +182,7 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="8"
+                                CornerRadius="9"
                                 Padding="{TemplateBinding Padding}"
                                 SnapsToDevicePixels="True">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -164,7 +192,7 @@
                                 <Setter TargetName="Bd" Property="Background" Value="{StaticResource BrandSoftBrush}" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#E8DDFA" />
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource BrandSoftSelectedBrush}" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="Bd" Property="Opacity" Value="0.5" />
@@ -178,7 +206,7 @@
         <!-- 状态按钮：暂停用红色，恢复用与「已同步」一致的绿色 -->
         <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
             <Setter Property="Foreground" Value="{StaticResource StateErrorBrush}" />
-            <Setter Property="BorderBrush" Value="#F3C6C2" />
+            <Setter Property="BorderBrush" Value="#F0C7C2" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -186,7 +214,7 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="8"
+                                CornerRadius="9"
                                 Padding="{TemplateBinding Padding}"
                                 SnapsToDevicePixels="True">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -196,7 +224,7 @@
                                 <Setter TargetName="Bd" Property="Background" Value="{StaticResource StateErrorSoftBrush}" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#F8D7D4" />
+                                <Setter TargetName="Bd" Property="Background" Value="#F6D9D5" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="Bd" Property="Opacity" Value="0.5" />
@@ -209,7 +237,7 @@
 
         <Style x:Key="SuccessButton" TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
             <Setter Property="Foreground" Value="{StaticResource StateSuccessBrush}" />
-            <Setter Property="BorderBrush" Value="#C3E7CF" />
+            <Setter Property="BorderBrush" Value="#BFE3CF" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -217,7 +245,7 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="8"
+                                CornerRadius="9"
                                 Padding="{TemplateBinding Padding}"
                                 SnapsToDevicePixels="True">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -227,7 +255,7 @@
                                 <Setter TargetName="Bd" Property="Background" Value="{StaticResource StateSuccessSoftBrush}" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#D5EFDD" />
+                                <Setter TargetName="Bd" Property="Background" Value="#D2EEDF" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="Bd" Property="Opacity" Value="0.5" />
@@ -258,7 +286,7 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="8"
+                                CornerRadius="9"
                                 Padding="{TemplateBinding Padding}"
                                 SnapsToDevicePixels="True">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -292,7 +320,7 @@
         <Style TargetType="Button" BasedOn="{StaticResource SecondaryButton}" />
 
         <!--
-          输入框：与卡片/按钮统一 8px 圆角（默认 WPF 模板是方角，是全界面最扎眼的不一致）。
+          输入框：与卡片/按钮统一 9px 圆角（默认 WPF 模板是方角，是全界面最扎眼的不一致）。
           悬停转浅主色描边，聚焦转实主色描边；多行编辑器改为顶对齐，避免文字被垂直居中。
         -->
         <Style TargetType="TextBox">
@@ -303,6 +331,7 @@
               只靠 MinHeight 会撑成 41，与 34 高的下拉框/按钮不齐，故单行固定 34。
             -->
             <Setter Property="Height" Value="34" />
+            <Setter Property="FontFamily" Value="{StaticResource BodyFont}" />
             <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
             <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
             <Setter Property="BorderBrush" Value="{StaticResource SoftBorderBrush}" />
@@ -323,7 +352,7 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="8"
+                                CornerRadius="9"
                                 SnapsToDevicePixels="True">
                             <ScrollViewer x:Name="PART_ContentHost" Focusable="False"
                                           VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
@@ -346,6 +375,7 @@
                                 <Setter Property="MinHeight" Value="140" />
                                 <Setter Property="VerticalContentAlignment" Value="Top" />
                                 <Setter Property="Padding" Value="10,8" />
+                                <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -372,7 +402,7 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="8"
+                                CornerRadius="9"
                                 SnapsToDevicePixels="True">
                             <ScrollViewer x:Name="PART_ContentHost" Focusable="False"
                                           VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
@@ -429,7 +459,7 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ComboBoxItem">
-                        <Border x:Name="Bd" Background="Transparent" CornerRadius="6"
+                        <Border x:Name="Bd" Background="Transparent" CornerRadius="7"
                                 Padding="{TemplateBinding Padding}" Margin="4,1">
                             <ContentPresenter VerticalAlignment="Center" />
                         </Border>
@@ -465,7 +495,7 @@
                                     Background="{TemplateBinding Background}"
                                     BorderBrush="{TemplateBinding BorderBrush}"
                                     BorderThickness="{TemplateBinding BorderThickness}"
-                                    CornerRadius="8" />
+                                    CornerRadius="9" />
                             <ContentPresenter x:Name="ContentSite" IsHitTestVisible="False"
                                               Content="{TemplateBinding SelectionBoxItem}"
                                               ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
@@ -479,13 +509,13 @@
                                    PopupAnimation="Fade">
                                 <Border Background="{StaticResource SurfaceBrush}"
                                         BorderBrush="{StaticResource SoftBorderBrush}" BorderThickness="1"
-                                        CornerRadius="8" Padding="0,4" Margin="0,4,0,0"
+                                        CornerRadius="10" Padding="0,4" Margin="0,4,0,0"
                                         MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
                                         MaxHeight="{TemplateBinding MaxDropDownHeight}">
                                     <!-- 下拉层加极轻投影，与平面卡片区分层次 -->
                                     <Border.Effect>
-                                        <DropShadowEffect BlurRadius="16" ShadowDepth="4" Direction="270"
-                                                          Opacity="0.14" Color="#2A2140" />
+                                        <DropShadowEffect BlurRadius="18" ShadowDepth="5" Direction="270"
+                                                          Opacity="0.16" Color="#1A1429" />
                                     </Border.Effect>
                                     <ScrollViewer VerticalScrollBarVisibility="Auto" SnapsToDevicePixels="True">
                                         <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Contained" />
@@ -512,7 +542,7 @@
             </Setter>
         </Style>
 
-        <!-- 复选框：自绘方框与对勾，替换系统默认的方角样式（设置页大量使用） -->
+        <!-- 复选框：自绘方框与对勾，替换系统默认的方角样式（连接列表与各配置弹窗使用） -->
         <Style TargetType="CheckBox">
             <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
@@ -522,9 +552,9 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="CheckBox">
                         <StackPanel Orientation="Horizontal" Background="Transparent">
-                            <Border x:Name="Box" Width="16" Height="16" CornerRadius="4"
+                            <Border x:Name="Box" Width="16" Height="16" CornerRadius="5"
                                     Background="{StaticResource SurfaceBrush}"
-                                    BorderBrush="#CFC4E6" BorderThickness="1.4"
+                                    BorderBrush="#CDC2DE" BorderThickness="1.4"
                                     VerticalAlignment="Center" SnapsToDevicePixels="True">
                                 <Path x:Name="Check" Visibility="Collapsed"
                                       Data="M3,8.2 L6.4,11.4 L11.6,4.8"
@@ -556,6 +586,55 @@
             </Setter>
         </Style>
 
+        <!--
+          开关式复选框：设置页这类「开 / 关」型偏好用它，40×22 的胶囊比 16px 勾选框更好点中。
+          只提供 keyed 样式，连接列表与各弹窗仍用上面的方框勾选。
+        -->
+        <Style x:Key="SwitchCheckBox" TargetType="CheckBox">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <StackPanel Orientation="Horizontal" Background="Transparent">
+                            <Border x:Name="Track" Width="40" Height="22" CornerRadius="11"
+                                    Background="{StaticResource TrackBrush}"
+                                    BorderBrush="{StaticResource SoftBorderBrush}"
+                                    BorderThickness="1" SnapsToDevicePixels="True">
+                                <Border x:Name="Knob" Width="16" Height="16" CornerRadius="8"
+                                        Background="{StaticResource SurfaceBrush}"
+                                        HorizontalAlignment="Left" VerticalAlignment="Center"
+                                        Margin="2,0,0,0" />
+                            </Border>
+                            <ContentPresenter Margin="8,0,0,0" VerticalAlignment="Center"
+                                              RecognizesAccessKey="True" />
+                        </StackPanel>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Track" Property="Background" Value="{StaticResource BrandBrush}" />
+                                <Setter TargetName="Track" Property="BorderBrush" Value="{StaticResource BrandBrush}" />
+                                <Setter TargetName="Knob" Property="HorizontalAlignment" Value="Right" />
+                                <Setter TargetName="Knob" Property="Margin" Value="0,0,2,0" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Track" Property="BorderBrush" Value="{StaticResource BrandBorderBrush}" />
+                            </Trigger>
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsMouseOver" Value="True" />
+                                    <Condition Property="IsChecked" Value="True" />
+                                </MultiTrigger.Conditions>
+                                <Setter TargetName="Track" Property="Background" Value="{StaticResource BrandHoverBrush}" />
+                            </MultiTrigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- 分组卡片 -->
         <Style TargetType="GroupBox">
             <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
@@ -565,8 +644,8 @@
                         <Border Background="{StaticResource SurfaceBrush}"
                                 BorderBrush="{StaticResource SoftBorderBrush}"
                                 BorderThickness="1"
-                                CornerRadius="12"
-                                Padding="16">
+                                CornerRadius="14"
+                                Padding="18">
                             <StackPanel>
                                 <TextBlock Text="{TemplateBinding Header}"
                                            Foreground="{StaticResource TextPrimaryBrush}"
@@ -588,7 +667,7 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="TabItem">
-                        <Border x:Name="Bd" Background="Transparent" CornerRadius="8" Padding="14,8" Margin="0,0,2,0">
+                        <Border x:Name="Bd" Background="Transparent" CornerRadius="9" Padding="14,8" Margin="0,0,2,0">
                             <StackPanel>
                                 <ContentPresenter x:Name="Header"
                                                   ContentSource="Header"
@@ -623,34 +702,39 @@
         </Style>
 
         <!--
-          顶栏导航：选中态用主色浅底胶囊（与帮助页分段按钮同一套语言）。
-          原实现是「圆角悬停底 + 下划线指示条」两套选中语言叠加，噪音大且把顶栏撑高。
+          顶栏导航：顶栏是深色「深海」底，导航随之反色。
+          默认半透明浅紫文字，悬停提亮为白，选中用半透明白底 + 底部亮紫指示条。
         -->
         <Style x:Key="NavButton" TargetType="RadioButton">
-            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource OnDarkMutedBrush}" />
             <Setter Property="FontSize" Value="13" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Margin" Value="0,0,4,0" />
+            <Setter Property="Margin" Value="0,0,2,0" />
             <!-- 单选组内焦点与选中是一回事（方向键同时移动），选中胶囊即可表达焦点，不必再叠虚线框 -->
             <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="RadioButton">
                         <Border x:Name="Bd" Background="Transparent" BorderBrush="Transparent"
-                                BorderThickness="1" CornerRadius="8" Padding="14,6"
+                                BorderThickness="1" CornerRadius="9" Padding="14,7"
                                 SnapsToDevicePixels="True">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
-                                              TextElement.FontWeight="SemiBold" />
+                            <Grid>
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                  TextElement.FontWeight="SemiBold" />
+                                <Border x:Name="Indicator" Height="2" CornerRadius="1" Margin="0,0,0,-1"
+                                        VerticalAlignment="Bottom" Background="Transparent" />
+                            </Grid>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource BrandSoftHoverBrush}" />
+                                <Setter TargetName="Bd" Property="Background" Value="#1FFFFFFF" />
+                                <Setter Property="Foreground" Value="{StaticResource OnDarkBrush}" />
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter Property="Foreground" Value="{StaticResource BrandBrush}" />
-                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource BrandSoftBrush}" />
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource BrandBorderBrush}" />
+                                <Setter Property="Foreground" Value="{StaticResource OnDarkBrush}" />
+                                <Setter TargetName="Bd" Property="Background" Value="#26FFFFFF" />
+                                <Setter TargetName="Indicator" Property="Background" Value="#B79CFF" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -670,7 +754,7 @@
                     <ControlTemplate TargetType="RadioButton">
                         <Border x:Name="Bd" Background="{StaticResource SurfaceBrush}"
                                 BorderBrush="{StaticResource SoftBorderBrush}" BorderThickness="1"
-                                CornerRadius="8" Padding="14,6">
+                                CornerRadius="9" Padding="14,6">
                             <ContentPresenter HorizontalAlignment="Center" />
                         </Border>
                         <ControlTemplate.Triggers>
@@ -692,7 +776,7 @@
             <Setter Property="Background" Value="{StaticResource BrandSoftBrush}" />
             <Setter Property="BorderBrush" Value="{StaticResource BrandBorderBrush}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="CornerRadius" Value="7" />
             <Setter Property="Padding" Value="10,4" />
             <Setter Property="Margin" Value="0,0,8,8" />
         </Style>
@@ -702,6 +786,7 @@
             <TextBlock Text="{Binding Text}"
                        Foreground="{Binding Foreground}"
                        FontWeight="{Binding FontWeight}"
+                       FontFamily="{StaticResource MonoFont}"
                        TextWrapping="NoWrap" />
         </DataTemplate>
 
@@ -709,8 +794,8 @@
         <Style x:Key="LogList" TargetType="ListBox">
             <Setter Property="ItemTemplate" Value="{StaticResource LogItemTemplate}" />
             <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="FontFamily" Value="Consolas" />
+            <Setter Property="Background" Value="{StaticResource SurfaceSubtleBrush}" />
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
             <Setter Property="FontSize" Value="12" />
             <Setter Property="Padding" Value="8,2,8,8" />
             <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto" />
@@ -722,7 +807,7 @@
                         <Setter Property="Template">
                             <Setter.Value>
                                 <ControlTemplate TargetType="ListBoxItem">
-                                    <Border x:Name="Bd" Background="Transparent" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                                    <Border x:Name="Bd" Background="Transparent" CornerRadius="5" Padding="{TemplateBinding Padding}">
                                         <ContentPresenter />
                                     </Border>
                                     <ControlTemplate.Triggers>
