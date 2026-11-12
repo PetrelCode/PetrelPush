@@ -89,15 +89,19 @@
 
         <!--
           行内纯图标按钮：连接列表的操作列不显示文字，含义交给 ToolTip。
-          固定 28×28，图标 15×15 居中，悬停底色沿用安静按钮的浅色。
+          固定 28×28，扣掉 1px 边框后内容区 26，图标用偶数 14 居中，左右各留 6 个整像素；
+          悬停底色沿用安静按钮的浅色。
         -->
-        <Style x:Key="RowIconButton" TargetType="Button" BasedOn="{StaticResource ToolbarButton}">
+        <Style x:Key="IconButton" TargetType="Button" BasedOn="{StaticResource ToolbarButton}">
             <Setter Property="Width" Value="28" />
             <Setter Property="Height" Value="28" />
             <Setter Property="MinWidth" Value="0" />
             <Setter Property="MinHeight" Value="0" />
             <Setter Property="Padding" Value="0" />
         </Style>
+
+        <!-- 行内按钮就是图标按钮，单独留个名字让连接列表的语义更直白 -->
+        <Style x:Key="RowIconButton" TargetType="Button" BasedOn="{StaticResource IconButton}" />
 
         <!-- 删除的图标本身是红色，悬停转浅红底，与两个中性图标区分 -->
         <Style x:Key="RowIconDangerButton" TargetType="Button" BasedOn="{StaticResource DangerButton}">
@@ -119,7 +123,7 @@
             <Setter Property="ItemContainerStyle" Value="{StaticResource FileRow}" />
         </Style>
 
-        <Style x:Key="FileHeaderText" TargetType="TextBlock">
+        <Style x:Key="FileHeaderText" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
             <Setter Property="FontSize" Value="11" />
             <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
         </Style>
@@ -386,12 +390,12 @@
                        TextTrimming="CharacterEllipsis" />
         </Border>
 
-        <!-- 顶栏：深海渐变底，品牌、导航与状态整体反色 -->
+        <!-- 顶栏：白底 + 底部细线，与浅灰页面区分层；选中导航用品牌色胶囊 -->
         <Border DockPanel.Dock="Top"
-                Background="{StaticResource HeaderSurfaceBrush}"
-                BorderBrush="{StaticResource BrandDeepLineBrush}"
+                Background="{StaticResource SurfaceBrush}"
+                BorderBrush="{StaticResource SoftBorderBrush}"
                 BorderThickness="0,0,0,1"
-                Padding="18,10">
+                Padding="18,8">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
@@ -405,14 +409,13 @@
                     <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
                         <TextBlock Text="PetrelPush" FontFamily="{StaticResource DisplayFont}"
                                    FontSize="16" FontWeight="Bold"
-                                   Foreground="{StaticResource OnDarkBrush}" />
+                                   Foreground="{StaticResource TextPrimaryBrush}" />
                         <TextBlock x:Name="HeaderVersionText" Text="v0.4.0"
-                                   Style="{StaticResource MetaText}" Margin="0,2,0,0"
-                                   Foreground="{StaticResource OnDarkMutedBrush}" />
+                                   Style="{StaticResource MetaText}" Margin="0,2,0,0" />
                     </StackPanel>
                     <!-- 品牌区与导航区之间加一条细分割线，避免两组元素糊成一片 -->
-                    <Border Width="1" Height="22" Margin="18,0,0,0" VerticalAlignment="Center"
-                            Background="{StaticResource BrandDeepLineBrush}" />
+                    <Border Width="1" Height="20" Margin="18,0,0,0" VerticalAlignment="Center"
+                            Background="{StaticResource SoftBorderBrush}" />
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="10,0,0,0" VerticalAlignment="Center">
@@ -438,13 +441,13 @@
                 -->
                 <Border Grid.Column="2" x:Name="PhaseBadge" Height="26" CornerRadius="13" Padding="12,0"
                         Margin="12,0,0,0" VerticalAlignment="Center"
-                        Background="{StaticResource BadgeSurfaceBrush}" SnapsToDevicePixels="True">
+                        Background="{StaticResource BrandSoftBrush}" SnapsToDevicePixels="True">
                     <StackPanel Orientation="Horizontal">
                         <Ellipse x:Name="PhaseDot" Width="6" Height="6" Margin="0,0,7,0"
-                                 VerticalAlignment="Center" Fill="{StaticResource BadgeIdleBrush}" />
+                                 VerticalAlignment="Center" Fill="{StaticResource StateIdleBrush}" />
                         <TextBlock x:Name="PhaseText" Text="已停止" FontSize="12" FontWeight="SemiBold"
                                    MaxWidth="160" TextTrimming="CharacterEllipsis"
-                                   Foreground="{StaticResource BadgeIdleBrush}" />
+                                   Foreground="{StaticResource StateIdleBrush}" />
                     </StackPanel>
                 </Border>
             </Grid>
@@ -709,9 +712,51 @@
                                             <StackPanel Grid.Column="1" Margin="0,0,12,0" VerticalAlignment="Center">
                                                 <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold"
                                                            TextTrimming="CharacterEllipsis" />
-                                                <TextBlock Text="{Binding Detail}" Style="{StaticResource MetaText}"
-                                                           Margin="0,3,0,0" TextTrimming="CharacterEllipsis"
-                                                           ToolTip="{Binding Detail}" />
+
+                                                <!--
+                                                  路径行：本地目录 → 主机胶囊 → 远端目录。
+                                                  三段用等宽字体 + 主机胶囊区分，扫一眼就能对上「哪台机器的哪个目录」；
+                                                  两侧路径各自截断，完整内容看 ToolTip。
+                                                -->
+                                                <Grid Margin="0,4,0,0" ToolTip="{Binding Detail}">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="*" />
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <TextBlock Grid.Column="0" Text="{Binding LocalRootText}"
+                                                               FontFamily="{StaticResource MonoFont}"
+                                                               FontSize="11"
+                                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               VerticalAlignment="Center" />
+
+                                                    <!-- 箭头夹在本地目录与主机之间，两侧留同样宽的空隙，不贴着任何一段 -->
+                                                    <TextBlock Grid.Column="1" Text="→" FontSize="11"
+                                                               Margin="8,0"
+                                                               Foreground="{StaticResource TextMutedBrush}"
+                                                               VerticalAlignment="Center" />
+
+                                                    <Border Grid.Column="2" VerticalAlignment="Center"
+                                                            Background="{StaticResource BrandSoftBrush}"
+                                                            BorderBrush="{StaticResource BrandBorderBrush}"
+                                                            BorderThickness="1" CornerRadius="6"
+                                                            Padding="6,1">
+                                                        <TextBlock Text="{Binding RemoteHostText}"
+                                                                   FontFamily="{StaticResource MonoFont}"
+                                                                   FontSize="11"
+                                                                   Foreground="{StaticResource BrandBrush}" />
+                                                    </Border>
+
+                                                    <TextBlock Grid.Column="3" Text="{Binding RemoteRootText}"
+                                                               FontFamily="{StaticResource MonoFont}"
+                                                               FontSize="11" Margin="6,0,0,0"
+                                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               VerticalAlignment="Center" />
+                                                </Grid>
                                             </StackPanel>
 
                                             <!-- 状态：启用状态 + 这条连接自己的引擎阶段，取代原来列表下方的「当前连接」说明 -->
@@ -732,24 +777,23 @@
                                             <!-- 操作列只放图标，含义靠 ToolTip 说明；删除的图标本身是红色 -->
                                             <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
                                                 <!--
-                                                  图标 16 配 28 的按钮：扣掉 1px 边框后内容区 26，左右各留 5 个整像素。
-                                                  之前用 15 时余 11，居中后落在 5.5 上被取整成 5/6，看上去就往一边偏。
-                                                  这里用 Path 的 Stretch 直接缩放，几何会居中到给定的框内。
+                                                  图标 14 配 28 的按钮：扣掉 1px 边框后内容区 26，左右各留 6 个整像素。
+                                                  偶数尺寸让居中落在整像素上，看上去不会往一边偏。
                                                 -->
                                                 <Button Style="{StaticResource RowIconButton}" Tag="{Binding}"
                                                         Click="OnEditSyncOptions" ToolTip="同步参数" Margin="0,0,4,0">
                                                     <Path Style="{StaticResource MenuIconSetting}"
-                                                          Width="16" Height="16" Stretch="Uniform" />
+                                                          Width="14" Height="14" Stretch="Uniform" />
                                                 </Button>
                                                 <Button Style="{StaticResource RowIconButton}" Tag="{Binding}"
                                                         Click="OnEditConnection" ToolTip="编辑连接" Margin="0,0,4,0">
                                                     <Path Style="{StaticResource MenuIconEdit}"
-                                                          Width="16" Height="16" Stretch="Uniform" />
+                                                          Width="14" Height="14" Stretch="Uniform" />
                                                 </Button>
                                                 <Button Style="{StaticResource RowIconDangerButton}" Tag="{Binding}"
                                                         Click="OnDeleteConnection" ToolTip="删除连接">
                                                     <Path Style="{StaticResource MenuIconDelete}"
-                                                          Width="16" Height="16" Stretch="Uniform" />
+                                                          Width="14" Height="14" Stretch="Uniform" />
                                                 </Button>
                                             </StackPanel>
                                         </Grid>
@@ -770,12 +814,7 @@
 
             <!-- 文件：本地 / 远端双栏浏览 -->
             <Grid x:Name="PageFiles" Visibility="Collapsed">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
-
-                <Grid Grid.Row="1">
+                <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="12" />
@@ -791,16 +830,22 @@
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
 
-                            <Grid Grid.Row="0" Margin="16,14,16,6">
-                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="Windows 本地" Style="{StaticResource CardTitle}" />
-                                    <TextBlock x:Name="LocalCountText" Style="{StaticResource MetaText}"
-                                               Margin="8,0,0,0" />
-                                </StackPanel>
+                            <Grid Grid.Row="0" Margin="16,13,16,8">
+                                <TextBlock Text="Windows 本地" Style="{StaticResource CardTitle}"
+                                           VerticalAlignment="Center" />
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                    <Button Content="上一级" Style="{StaticResource ToolbarButton}" Click="OnLocalUp" />
-                                    <Button Content="刷新" Style="{StaticResource ToolbarButton}"
-                                            Margin="6,0,0,0" Click="OnLocalRefresh" />
+                                    <!-- 图标 14 配 28 的按钮，与连接列表的操作图标同尺寸 -->
+                                    <Button Style="{StaticResource IconButton}" Click="OnLocalUp" ToolTip="上一级">
+                                        <Path Width="14" Height="14" Stretch="Uniform"
+                                              Stroke="{StaticResource BrandBrush}" StrokeThickness="1.8"
+                                              StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                              Data="M8,13.2 V2.9 M3.3,7.4 L8,2.7 L12.7,7.4" />
+                                    </Button>
+                                    <Button Style="{StaticResource IconButton}" Click="OnLocalRefresh"
+                                            ToolTip="刷新" Margin="4,0,0,0">
+                                        <Path Style="{StaticResource MenuIconReload}"
+                                              Width="14" Height="14" Stretch="Uniform" />
+                                    </Button>
                                 </StackPanel>
                             </Grid>
 
@@ -827,7 +872,7 @@
                                     <RowDefinition Height="*" />
                                 </Grid.RowDefinitions>
 
-                                <Grid Grid.Row="0" Margin="16,0,16,6">
+                                <Grid Grid.Row="0" Margin="16,0,16,8">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="84" />
@@ -842,7 +887,11 @@
                                                HorizontalAlignment="Right" />
                                 </Grid>
 
-                                <ListBox Grid.Row="1" x:Name="LocalFileList" Style="{StaticResource FileList}"
+                                <!-- 列表自带浅底并补上底部圆角，顶部一条细线与表头分开 -->
+                                <Border Grid.Row="1" Background="{StaticResource SurfaceSubtleBrush}"
+                                        BorderBrush="{StaticResource SoftBorderBrush}" BorderThickness="0,1,0,0"
+                                        CornerRadius="0,0,13,13">
+                                <ListBox x:Name="LocalFileList" Style="{StaticResource FileList}"
                                          ItemTemplate="{StaticResource LocalFileRowTemplate}"
                                          SelectionMode="Single" MouseDoubleClick="OnLocalDoubleClick"
                                          AllowDrop="True" DragOver="OnLocalDragOver" Drop="OnLocalDrop"
@@ -907,6 +956,7 @@
                                         </ContextMenu>
                                     </ListBox.ContextMenu>
                                 </ListBox>
+                                </Border>
                             </Grid>
                         </Grid>
                     </Border>
@@ -920,16 +970,22 @@
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
 
-                            <Grid Grid.Row="0" Margin="16,14,16,6">
-                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="Linux 远端" Style="{StaticResource CardTitle}" />
-                                    <TextBlock x:Name="RemoteCountText" Style="{StaticResource MetaText}"
-                                               Margin="8,0,0,0" />
-                                </StackPanel>
+                            <Grid Grid.Row="0" Margin="16,13,16,8">
+                                <TextBlock Text="Linux 远端" Style="{StaticResource CardTitle}"
+                                           VerticalAlignment="Center" />
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                    <Button Content="上一级" Style="{StaticResource ToolbarButton}" Click="OnRemoteUp" />
-                                    <Button Content="刷新" Style="{StaticResource ToolbarButton}"
-                                            Margin="6,0,0,0" Click="OnRemoteRefresh" />
+                                    <!-- 图标 14 配 28 的按钮，与连接列表的操作图标同尺寸 -->
+                                    <Button Style="{StaticResource IconButton}" Click="OnRemoteUp" ToolTip="上一级">
+                                        <Path Width="14" Height="14" Stretch="Uniform"
+                                              Stroke="{StaticResource BrandBrush}" StrokeThickness="1.8"
+                                              StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                              Data="M8,13.2 V2.9 M3.3,7.4 L8,2.7 L12.7,7.4" />
+                                    </Button>
+                                    <Button Style="{StaticResource IconButton}" Click="OnRemoteRefresh"
+                                            ToolTip="刷新" Margin="4,0,0,0">
+                                        <Path Style="{StaticResource MenuIconReload}"
+                                              Width="14" Height="14" Stretch="Uniform" />
+                                    </Button>
                                 </StackPanel>
                             </Grid>
 
@@ -957,7 +1013,7 @@
                                     <RowDefinition Height="*" />
                                 </Grid.RowDefinitions>
 
-                                <Grid Grid.Row="0" Margin="16,0,16,6">
+                                <Grid Grid.Row="0" Margin="16,0,16,8">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="84" />
@@ -975,7 +1031,10 @@
                                                HorizontalAlignment="Right" />
                                 </Grid>
 
-                                <ListBox Grid.Row="1" x:Name="RemoteFileList" Style="{StaticResource FileList}"
+                                <Border Grid.Row="1" Background="{StaticResource SurfaceSubtleBrush}"
+                                        BorderBrush="{StaticResource SoftBorderBrush}" BorderThickness="0,1,0,0"
+                                        CornerRadius="0,0,13,13">
+                                <ListBox x:Name="RemoteFileList" Style="{StaticResource FileList}"
                                          ItemTemplate="{StaticResource RemoteFileRowTemplate}"
                                          SelectionMode="Single" MouseDoubleClick="OnRemoteDoubleClick"
                                          AllowDrop="True" DragOver="OnRemoteDragOver" Drop="OnRemoteDrop"
@@ -1039,6 +1098,7 @@
                                         </ContextMenu>
                                     </ListBox.ContextMenu>
                                 </ListBox>
+                                </Border>
                             </Grid>
                         </Grid>
                     </Border>
@@ -1061,11 +1121,11 @@
                         </Grid.RowDefinitions>
 
                         <StackPanel Grid.Row="0" Margin="0,0,0,12">
-                            <TextBlock Text="根目录 .syncignore" Style="{StaticResource CardTitle}" />
+                            <TextBlock Text="根目录 .syncignore" Style="{StaticResource SectionTitle}" Margin="0,0,0,4" />
                             <TextBlock Text="优先级最高，可覆盖 .gitignore，支持 ! 重新包含"
-                                       Style="{StaticResource CardHint}" Margin="0,4,0,0" />
+                                       Style="{StaticResource CardHint}" Margin="0,6,0,0" />
                             <TextBlock x:Name="IgnorePathText" Style="{StaticResource MetaText}"
-                                       Margin="0,5,0,0" TextTrimming="CharacterEllipsis" />
+                                       Margin="0,6,0,0" TextTrimming="CharacterEllipsis" />
                         </StackPanel>
 
                         <!-- 多行编辑器不用固定高度：窗口压低时由星号行收缩，避免下边框被裁掉 -->
@@ -1073,25 +1133,50 @@
                                  FontFamily="{StaticResource MonoFont}" FontSize="12" VerticalScrollBarVisibility="Auto"
                                  HorizontalScrollBarVisibility="Auto" />
 
-                        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,14,0,0">
-                            <Button Content="保存并立即生效" Style="{StaticResource PrimaryButton}" Click="OnSaveIgnore" />
-                            <Button Content="重新加载" Style="{StaticResource QuietButton}"
-                                    Margin="8,0,0,0" Click="OnReloadIgnore" />
-                        </StackPanel>
+                        <Grid Grid.Row="2" Margin="0,14,0,0">
+                            <StackPanel Orientation="Horizontal">
+                                <Button Content="保存并立即生效" Style="{StaticResource PrimaryButton}" Click="OnSaveIgnore" />
+                                <Button Content="重新加载" Style="{StaticResource QuietButton}"
+                                        Margin="8,0,0,0" Click="OnReloadIgnore" />
+                            </StackPanel>
+                            <TextBlock Text="每行一条规则，保存后立即重建忽略规则并用于下一轮扫描"
+                                       Style="{StaticResource MetaText}" HorizontalAlignment="Right"
+                                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                        </Grid>
                     </Grid>
                 </Border>
 
                 <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,12,0,0">
                     <StackPanel>
-                        <TextBlock Text="为什么这个文件没被同步？" Style="{StaticResource CardTitle}"
-                                   Margin="0,0,0,10" />
-                        <DockPanel>
-                            <Button DockPanel.Dock="Right" Content="查询" Style="{StaticResource QuietButton}"
-                                    MinWidth="84" Margin="8,0,0,0" Click="OnQueryIgnore" />
+                        <TextBlock Text="为什么这个文件没被同步？" Style="{StaticResource SectionTitle}"
+                                   Margin="0,0,0,4" />
+                        <TextBlock Text="填一个相对路径（例如 dist/runtime.json），查它命中了哪条规则、为什么被排除"
+                                   Style="{StaticResource CardHint}" Margin="0,6,0,0" />
+
+                        <Grid Margin="0,12,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
                             <TextBox x:Name="IgnoreQueryBox" />
-                        </DockPanel>
-                        <TextBlock x:Name="IgnoreQueryResult" Margin="0,10,0,0" FontSize="12"
-                                   TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" />
+                            <Button Grid.Column="1" Content="查询" Style="{StaticResource QuietButton}"
+                                    MinWidth="84" Margin="8,0,0,0" Click="OnQueryIgnore" />
+                        </Grid>
+
+                        <!-- 结果为空时不占位：查询前的空行会把卡片撑高 -->
+                        <TextBlock x:Name="IgnoreQueryResult" FontSize="12" TextWrapping="Wrap"
+                                   Foreground="{StaticResource TextSecondaryBrush}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                    <Setter Property="Margin" Value="0,10,0,0" />
+                                    <Style.Triggers>
+                                        <Trigger Property="Text" Value="">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
                     </StackPanel>
                 </Border>
             </Grid>
@@ -1105,11 +1190,15 @@
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
 
-                        <Grid Grid.Row="0" Margin="16,14,16,10">
+                        <Grid Grid.Row="0" Margin="16,13,16,10">
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <TextBlock Text="级别" Margin="0,0,8,0" FontSize="12"
-                                           Foreground="{StaticResource TextSecondaryBrush}" />
-                                <ComboBox x:Name="LogLevelCombo" Width="120" SelectedIndex="0" SelectionChanged="OnLogLevelChanged">
+                                <TextBlock Text="日志" Style="{StaticResource SectionTitle}"
+                                           Margin="0" VerticalAlignment="Center" />
+                                <Border Width="1" Height="18" Margin="14,0" VerticalAlignment="Center"
+                                        Background="{StaticResource SoftBorderBrush}" />
+
+                                <TextBlock Text="级别" Style="{StaticResource MetaText}" Margin="0,0,8,0" />
+                                <ComboBox x:Name="LogLevelCombo" Width="112" SelectedIndex="0" SelectionChanged="OnLogLevelChanged">
                                     <ComboBoxItem Content="全部" />
                                     <ComboBoxItem Content="调试" />
                                     <ComboBoxItem Content="信息" />
@@ -1117,20 +1206,35 @@
                                     <ComboBoxItem Content="错误" />
                                 </ComboBox>
 
-                                <TextBlock Text="连接" Margin="16,0,8,0" FontSize="12"
-                                           Foreground="{StaticResource TextSecondaryBrush}" />
-                                <ComboBox x:Name="LogConnectionCombo" Width="180"
+                                <TextBlock Text="连接" Style="{StaticResource MetaText}" Margin="14,0,8,0" />
+                                <ComboBox x:Name="LogConnectionCombo" Width="170"
                                           SelectionChanged="OnLogConnectionChanged" />
                             </StackPanel>
+
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                                <Button Content="打开日志目录" Style="{StaticResource QuietButton}" MinWidth="112" Click="OnOpenLogs" />
-                                <Button Content="清空显示" Style="{StaticResource QuietButton}"
-                                        MinWidth="92" Margin="8,0,0,0" Click="OnClearLogs" />
+                                <Button Style="{StaticResource QuietButton}" Click="OnOpenLogs">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Path Style="{StaticResource MenuIconFolder}" Width="13" Height="13"
+                                              Fill="{StaticResource TextSecondaryBrush}"
+                                              Stretch="Uniform" VerticalAlignment="Center" />
+                                        <TextBlock Text="打开日志目录" Margin="6,0,0,0" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Style="{StaticResource QuietButton}" Margin="8,0,0,0" Click="OnClearLogs">
+                                    <StackPanel Orientation="Horizontal">
+                                        <!-- 清空的是界面列表而不是日志文件，图标保持中性色，避免看成危险操作 -->
+                                        <Path Style="{StaticResource MenuIconDelete}" Width="13" Height="13"
+                                              Fill="{StaticResource TextSecondaryBrush}"
+                                              Stretch="Uniform" VerticalAlignment="Center" />
+                                        <TextBlock Text="清空显示" Margin="6,0,0,0" />
+                                    </StackPanel>
+                                </Button>
                             </StackPanel>
                         </Grid>
 
                         <!-- 与状态页同一处理：列表底色自己带底部圆角，避免盖住卡片圆角 -->
                         <Border Grid.Row="1" Background="{StaticResource SurfaceSubtleBrush}"
+                                BorderBrush="{StaticResource SoftBorderBrush}" BorderThickness="0,1,0,0"
                                 CornerRadius="0,0,13,13">
                             <ListBox x:Name="LogList" Style="{StaticResource LogList}"
                                      Background="Transparent" />
@@ -1199,6 +1303,93 @@
 
                             <!-- 结果文本平时为空：置为 Collapsed，避免空行在卡片底部撑出一段留白 -->
                             <TextBlock x:Name="SettingsResultText" FontSize="12" TextWrapping="Wrap">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                        <Setter Property="Margin" Value="0,10,0,0" />
+                                        <Style.Triggers>
+                                            <Trigger Property="Text" Value="">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+
+                    <!--
+                      快速命令：终端顶栏弹窗里列出的条目，按连接保存在 config.json。
+                      名称与命令分开，是因为常用命令本身常常是一长串参数，光看命令认不出用途。
+                    -->
+                    <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+                        <StackPanel>
+                            <!-- 页头：标题在左，「添加命令」是这张卡片的主操作，放右上角与连接卡一致 -->
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Grid.Column="0" Text="快速命令" Style="{StaticResource SectionTitle}"
+                                           Margin="0" VerticalAlignment="Center" />
+
+                                <Button Grid.Column="1" Style="{StaticResource PrimaryButton}"
+                                        Click="OnAddQuickCommand">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Path Width="11" Height="11" Stretch="Uniform"
+                                              Stroke="White" StrokeThickness="1.8"
+                                              StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                              Data="M7,2.2 V11.8 M2.2,7 H11.8"
+                                              VerticalAlignment="Center" />
+                                        <TextBlock Text="添加命令" Margin="7,0,0,0" />
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
+
+                            <TextBlock Style="{StaticResource CardHint}" Margin="0,8,0,0" TextWrapping="Wrap"
+                                       Text="终端顶栏「快速命令」浮层里列出的条目，按当前连接保存在 config.json。点一条只把命令填进终端输入行，不会自动回车。" />
+
+                            <TextBlock x:Name="QuickCommandEmptyText" Style="{StaticResource MetaText}"
+                                       Margin="0,10,0,0" TextWrapping="Wrap" Visibility="Collapsed"
+                                       Text="还没有快速命令，点右上角「添加命令」新建一条。" />
+
+                            <ItemsControl x:Name="QuickCommandList" Margin="0,10,0,0">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border BorderBrush="{StaticResource SoftBorderBrush}"
+                                                BorderThickness="0,0,0,1" Padding="0,10">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="{Binding Command}"
+                                                               FontFamily="{StaticResource MonoFont}"
+                                                               FontSize="11"
+                                                               Foreground="{StaticResource TextMutedBrush}"
+                                                               Margin="0,3,0,0" TextTrimming="CharacterEllipsis"
+                                                               ToolTip="{Binding Command}" />
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal"
+                                                            VerticalAlignment="Center">
+                                                    <Button Content="编辑" Style="{StaticResource ToolbarButton}"
+                                                            Tag="{Binding}" Click="OnEditQuickCommand" />
+                                                    <Button Content="删除" Style="{StaticResource DangerButton}"
+                                                            Padding="11,3" MinHeight="26" MinWidth="60"
+                                                            Margin="6,0,0,0" Tag="{Binding}"
+                                                            Click="OnDeleteQuickCommand" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <!-- 保存结果就地给出：与「启动与终端」卡的结果文本分开，避免反馈离操作太远 -->
+                            <TextBlock x:Name="QuickCommandResultText" FontSize="12" TextWrapping="Wrap">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
                                         <Setter Property="Margin" Value="0,10,0,0" />
@@ -1305,12 +1496,16 @@
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <StackPanel Grid.Row="0" Orientation="Horizontal">
-                    <RadioButton x:Name="HelpNavDoc" Content="说明文档" Tag="doc" GroupName="HelpNav"
-                                 IsChecked="True" Style="{StaticResource SegmentButton}" Click="OnHelpNavigate" />
-                    <RadioButton x:Name="HelpNavAbout" Content="关于" Tag="about" GroupName="HelpNav"
-                                 Style="{StaticResource SegmentButton}" Click="OnHelpNavigate" />
-                </StackPanel>
+                <!-- 分段切换与正文之间用一条淡线分开，长文滚动时边界更清楚 -->
+                <Border Grid.Row="0" Padding="0,0,0,10"
+                        BorderBrush="{StaticResource SoftBorderBrush}" BorderThickness="0,0,0,1">
+                    <StackPanel Orientation="Horizontal">
+                        <RadioButton x:Name="HelpNavDoc" Content="说明文档" Tag="doc" GroupName="HelpNav"
+                                     IsChecked="True" Style="{StaticResource SegmentButton}" Click="OnHelpNavigate" />
+                        <RadioButton x:Name="HelpNavAbout" Content="关于" Tag="about" GroupName="HelpNav"
+                                     Style="{StaticResource SegmentButton}" Click="OnHelpNavigate" />
+                    </StackPanel>
+                </Border>
 
                 <ScrollViewer Grid.Row="1" Margin="0,12,0,0" VerticalScrollBarVisibility="Auto"
                               HorizontalScrollBarVisibility="Disabled">
@@ -1341,7 +1536,7 @@
                                     <TextBlock Text="• 内置终端：文件页右键即可在对应目录打开本地 PowerShell 或远端 SSH 终端，支持 vim / htop 等全屏程序" TextWrapping="Wrap" Margin="0,4,0,0" />
                                     <TextBlock Text="• 多连接：「配置 · 连接」卡片列出全部连接，每行显示「本地目录 → 用户@主机:端口 远端目录」，右侧两枚标签标出该连接的启用状态与传输状态（已同步 / 扫描中 / 传输中 / 已暂停 / 异常），随运行实时更新；点某一行设为当前连接；「新建连接」加一条，行右侧三枚图标依次是同步参数（齿轮）、编辑（铅笔）、删除（垃圾桶），悬停可看名称；各条连接独立运行（运行日志多连接共用一份，路径见「设置」页）" TextWrapping="Wrap" Margin="0,4,0,0" />
                                     <TextBlock Text="• 逐条启用 / 禁用：列表行左侧的「启用」勾选即时生效——取消后该连接立即停止同步、不占用远端 SSH 连接，配置与快照原样保留；状态页的「立即同步 / 暂停 / 深度校验 / 重置失败」只作用于当前连接，托盘菜单里的同名动作则作用于全部已启用连接" TextWrapping="Wrap" Margin="0,4,0,0" />
-                                    <TextBlock Text="• 连接配置弹窗：只放基本（名称 / 本地目录 / 远端目录）与远端连接（主机 / 端口 / 用户 / 密码或私钥）；点「测试连接」验证并确认指纹，点「保存」后立即重建引擎（禁用状态下只保存、不启动）" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                    <TextBlock Text="• 连接配置弹窗：只放基本（配置名称 + 启用连接开关各占一半，其下是本地目录 / 远端目录）与远端连接（主机 / 端口 / 用户 / 密码或私钥）；点「测试连接」验证并确认指纹，点「保存」后立即重建引擎（禁用状态下只保存、不启动）" TextWrapping="Wrap" Margin="0,4,0,0" />
                                     <TextBlock Text="• 同步参数单独配置：列表每行右侧的齿轮图标（悬停提示「同步参数」）点开是独立的同步参数弹窗（去抖、轮询、并发、限速、空目录等），只作用于该行连接，保存后立即生效；新建连接一律使用默认值" TextWrapping="Wrap" Margin="0,4,0,0" />
                                 </StackPanel>
                             </Border>
@@ -1369,7 +1564,7 @@
                                     <TextBlock Text="• 托盘：双击打开窗口；关闭窗口只是隐藏，同步仍在后台运行。" TextWrapping="Wrap" Margin="0,4,0,0" />
                                     <TextBlock Text="• 文件：并排查看本地与远端目录，双击进入子目录，选中远端文件可下载或删除；两侧右键都能上传文件、新建文件夹。" TextWrapping="Wrap" Margin="0,4,0,0" />
                                     <TextBlock Text="• 终端：在文件页列表上右键「在终端中打开」，终端会直接落在所选目录。" TextWrapping="Wrap" Margin="0,4,0,0" />
-                                    <TextBlock Text="• 设置：只放应用级偏好——开机自启（拨到开启即写注册表并保存）、本地终端、存储位置；同步参数在「配置」页每行的齿轮图标（同步参数）里，弹窗保存后重建该连接的引擎。" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                    <TextBlock Text="• 设置：开机自启（拨到开启即写注册表并保存）、本地终端、快速命令（按连接保存，名称 + 命令）、存储位置；同步参数在「配置」页每行的齿轮图标（同步参数）里，弹窗保存后重建该连接的引擎。" TextWrapping="Wrap" Margin="0,4,0,0" />
                                 </StackPanel>
                             </Border>
 
@@ -1388,7 +1583,7 @@
                                     <TextBlock Text="• 拖拽上传：把文件拖到左侧本地列表会复制到本地当前目录（由同步引擎上传）；拖到右侧远端列表会直接上传到远端当前目录，不落本地" TextWrapping="Wrap" Margin="0,4,0,0" />
                                     <TextBlock Text="• 上传文件：两侧列表右键都有「上传文件」。左侧从本机选文件后复制到本地当前目录，交给同步引擎上传；右侧直接上传到远端当前目录，不落本地。同名文件都会先二次确认" TextWrapping="Wrap" Margin="0,4,0,0" />
                                     <TextBlock Text="• 新建文件夹：两侧列表右键都有「新建文件夹」，输入名称后在该侧当前目录下创建（选中文件夹时建在该文件夹内）；本地新建的目录由同步引擎随后上传，远端新建的目录直接写入远端、不进入同步队列" TextWrapping="Wrap" Margin="0,4,0,0" />
-                                    <TextBlock Text="• 路径条右侧「复制」可复制当前路径；本地列表右键可「在资源管理器中打开」（选中文件时定位到该文件）" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                    <TextBlock Text="• 路径条右侧「复制」可复制当前路径；卡片右上角的 ↑ / ↻ 图标分别是「上一级」与「刷新」（悬停可看名称）；本地列表右键可「在资源管理器中打开」（选中文件时定位到该文件）" TextWrapping="Wrap" Margin="0,4,0,0" />
                                     <TextBlock Text="• 本地列表右键「删除」会把条目移到回收站，远端对应内容在下一轮同步中被删除（单向镜像语义）" TextWrapping="Wrap" Margin="0,4,0,0" />
                                     <TextBlock Text="• 远端列表右键「删除」直接删除服务器上的文件；选中文件夹时连同其中全部内容递归删除，符号链接只删链接本身。删除不进回收站，二次确认后立即生效" TextWrapping="Wrap" Margin="0,4,0,0" />
                                     <TextBlock Text="• 远端删除不进入同步队列：同步只按本地变更推进，删掉远端后引擎不会自动补传，本地文件再次修改后才会重新上传" TextWrapping="Wrap" Margin="0,4,0,0" />
@@ -1409,9 +1604,10 @@
                                     <TextBlock Text="• 鼠标右键直接在终端里粘贴：没有选中内容时粘贴剪贴板，选中了内容则复制所选并清除选区（Ctrl+Shift+C 同样可复制）；不会弹出浏览器右键菜单" TextWrapping="Wrap" Margin="0,4,0,0" />
                                     <TextBlock Text="• 连接失败或会话断开时，原因直接显示在终端里，按 Enter 可重新连接；关闭窗口即结束会话" TextWrapping="Wrap" Margin="0,4,0,0" />
                                     <TextBlock Text="• 可同时打开多个终端窗口：左侧列表开本地终端，右侧列表开远端终端" TextWrapping="Wrap" Margin="0,4,0,0" />
-                                    <TextBlock Text="• 快速命令：顶栏「快速命令」展开已保存的命令列表，点选即发送到当前会话（相当于输入后回车）；面板里可「＋ 添加命令」或点每行右侧「✕」移除。命令随配置保存，本地终端与远端终端共用同一份列表" TextWrapping="Wrap" Margin="0,4,0,0" />
-                                    <TextBlock Text="• 快速路径：顶栏「快速路径」展开已保存的目录，点选后面板收起并在终端里 cd 过去；本地终端添加时直接选文件夹，远端终端添加时填一个以 / 开头的远端绝对路径，两份列表分开保存" TextWrapping="Wrap" Margin="0,4,0,0" />
-                                    <TextBlock Text="• 快速命令与快速路径保存在配置文件中，增删立即写盘，不影响正在进行的同步；会话未连接时点选只提示、不发送" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                    <TextBlock Text="• 终端窗口独立于主窗口：主窗口最小化或收进托盘后，终端仍保持原状继续可用；关闭终端窗口只结束该会话" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                    <TextBlock Text="• 快速命令：顶栏「快速命令」在按钮下方弹出条目浮层，按「名称 + 命令」列出已保存的条目；点一条只把命令填进终端输入行，按回车才会执行。条目的增删改在「设置」页的「快速命令」里，名称用于在浮层里辨认用途" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                    <TextBlock Text="• 快速路径：顶栏「快速路径」同样在按钮下方弹出浮层，点一条把 cd 命令填进输入行（不自动回车）；浮层里可「＋ 添加路径」，点行尾「✕」移除，本地终端选文件夹、远端终端填以 / 开头的绝对路径，两份列表分开保存" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                    <TextBlock Text="• 快速命令与快速路径保存在配置文件中，改动立即写盘，不影响正在进行的同步；会话未连接时点选只提示、不填入" TextWrapping="Wrap" Margin="0,4,0,0" />
                                     <TextBlock Text="提示：终端内可执行任意命令，不受「远端操作限制在远端目录内」这条约束。窗口顶部会显示当前登录的主机与用户，操作前请确认目标机器。" TextWrapping="Wrap" Margin="0,10,0,0" Foreground="{StaticResource TextSecondaryBrush}" />
                                 </StackPanel>
                             </Border>

@@ -11,7 +11,6 @@ public partial class TextInputWindow : Window
         InitializeComponent();
 
         Title = title;
-        TitleText.Text = title;
         HintText.Text = hint;
         InputBox.Text = initialValue;
 

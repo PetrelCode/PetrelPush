@@ -237,21 +237,36 @@ public sealed class SyncOptions
 /// </summary>
 public sealed class QuickAccessOptions
 {
-    /// <summary>快速命令：选中后原样发送到终端（相当于输入后回车）。</summary>
-    public List<string> Commands { get; set; } = new();
+    /// <summary>快速命令：弹窗里按名称挑选，选中后把命令填到终端的输入行（不自动回车）。</summary>
+    public List<QuickCommand> Commands { get; set; } = new();
 
-    /// <summary>本地终端的快速路径（Windows 绝对路径，选中后 cd 过去）。</summary>
+    /// <summary>本地终端的快速路径（Windows 绝对路径，选中后填入 cd 命令）。</summary>
     public List<string> LocalPaths { get; set; } = new();
 
-    /// <summary>远端终端的快速路径（Linux 绝对路径，选中后 cd 过去）。</summary>
+    /// <summary>远端终端的快速路径（Linux 绝对路径，选中后填入 cd 命令）。</summary>
     public List<string> RemotePaths { get; set; } = new();
 
     public QuickAccessOptions Clone() => new()
     {
-        Commands = new List<string>(Commands ?? new List<string>()),
+        Commands = (Commands ?? new List<QuickCommand>()).Select(item => item.Clone()).ToList(),
         LocalPaths = new List<string>(LocalPaths ?? new List<string>()),
         RemotePaths = new List<string>(RemotePaths ?? new List<string>()),
     };
+}
+
+/// <summary>
+/// 一条快速命令：名称用于在弹窗与设置页里辨认，命令本身要填进终端执行。
+/// 两者分开是因为常用命令（带一堆参数）本身无法一眼看懂用途。
+/// </summary>
+public sealed class QuickCommand
+{
+    /// <summary>展示名称，例如「构建前端」。</summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>实际填进终端的命令文本（单行，不含换行）。</summary>
+    public string Command { get; set; } = string.Empty;
+
+    public QuickCommand Clone() => new() { Name = Name, Command = Command };
 }
 
 public sealed class RetryOptions

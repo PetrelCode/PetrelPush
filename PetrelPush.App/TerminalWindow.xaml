@@ -4,26 +4,33 @@
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         Title="终端" Height="600" Width="960"
         MinHeight="320" MinWidth="560"
-        WindowStartupLocation="CenterOwner"
+        WindowStartupLocation="CenterScreen"
         Background="#1B1B26"
         FontFamily="Microsoft YaHei UI, Segoe UI"
         UseLayoutRounding="True">
 
+    <!--
+      刻意不设 Owner（打开方见 MainWindow.ShowTerminalWindow）：带 Owner 的窗口在主窗口最小化时
+      会被系统连带隐藏，而终端往往要在主窗口收起后继续用。位置由打开方手动居中到主窗口，
+      CenterScreen 只是没人指定位置时的兜底。
+    -->
     <Window.Resources>
         <!--
-            顶栏的快速入口控件：深色，与状态条同色系。
-            注意不要用 ContextMenu / Popup 覆盖终端区 —— WebView2 是 HWND 宿主控件，
-            浮层会被遮挡；快速入口因此做成顶栏下方的一行面板，靠布局撑开而不是覆盖。
+            顶栏的快速入口按钮：深色，与状态条同色系。
+            点开的是贴在按钮下方弹出的浮层（QuickAccessPickerWindow，无边框独立窗口）——
+            WebView2 是 HWND 宿主控件，同区域的 WPF 浮层会被遮挡，
+            靠布局撑开的面板又会把终端内容往下挤。
         -->
-        <Style x:Key="QuickToggleButton" TargetType="ToggleButton">
+        <Style x:Key="QuickEntryButton" TargetType="Button">
             <Setter Property="Foreground" Value="#C9C3DC" />
             <Setter Property="FontSize" Value="11" />
             <Setter Property="Padding" Value="10,3" />
             <Setter Property="Margin" Value="0,0,6,0" />
             <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="Template">
                 <Setter.Value>
-                    <ControlTemplate TargetType="ToggleButton">
+                    <ControlTemplate TargetType="Button">
                         <Border x:Name="Chrome" Background="Transparent" BorderBrush="#3B3550"
                                 BorderThickness="1" CornerRadius="7" Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -32,57 +39,21 @@
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Chrome" Property="Background" Value="#332C4A" />
                                 <Setter TargetName="Chrome" Property="BorderBrush" Value="#5B4F7A" />
-                            </Trigger>
-                            <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="Chrome" Property="Background" Value="#4A3568" />
-                                <Setter TargetName="Chrome" Property="BorderBrush" Value="#9254DE" />
                                 <Setter Property="Foreground" Value="#E6E1F5" />
                             </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- 面板里的行：整行可点，悬停高亮 -->
-        <Style x:Key="QuickItemButton" TargetType="Button">
-            <Setter Property="Foreground" Value="#E6E1F5" />
-            <Setter Property="FontSize" Value="12" />
-            <Setter Property="Padding" Value="9,5" />
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="HorizontalContentAlignment" Value="Left" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Chrome" Background="Transparent" CornerRadius="6"
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                              VerticalAlignment="Center" />
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Chrome" Property="Background" Value="#332C4A" />
-                            </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Chrome" Property="Background" Value="#3F3757" />
+                                <Setter TargetName="Chrome" Property="Background" Value="#4A3568" />
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="#9254DE" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
-        </Style>
-
-        <!-- 面板右上角的「添加 / 收起」：更轻的字重与颜色 -->
-        <Style x:Key="QuickActionButton" TargetType="Button" BasedOn="{StaticResource QuickItemButton}">
-            <Setter Property="Foreground" Value="#B9AEE0" />
-            <Setter Property="FontSize" Value="11" />
-            <Setter Property="Padding" Value="8,3" />
         </Style>
     </Window.Resources>
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
@@ -105,60 +76,14 @@
                            FontSize="11" VerticalAlignment="Center" Text="正在准备…" />
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="0,0,12,0"
                             VerticalAlignment="Center">
-                    <ToggleButton x:Name="QuickCommandButton" Content="快速命令 ▾"
-                                  Style="{StaticResource QuickToggleButton}"
-                                  ToolTip="选择一条已保存的命令，直接发送到终端"
-                                  Click="OnToggleQuickCommands" />
-                    <ToggleButton x:Name="QuickPathButton" Content="快速路径 ▾"
-                                  Style="{StaticResource QuickToggleButton}"
-                                  ToolTip="选择一条已保存的路径，让终端切换过去"
-                                  Click="OnToggleQuickPaths" />
+                    <Button Content="快速命令" Style="{StaticResource QuickEntryButton}"
+                            ToolTip="在按钮下方列出已保存的命令，点一条只填到终端输入行，按回车才执行"
+                            Click="OnOpenQuickCommands" />
+                    <Button Content="快速路径" Style="{StaticResource QuickEntryButton}"
+                            ToolTip="在按钮下方列出已保存的目录，点一条把 cd 命令填到终端输入行"
+                            Click="OnOpenQuickPaths" />
                 </StackPanel>
             </DockPanel>
-        </Border>
-
-        <!-- 快速入口面板：占据独立一行，展开时把终端区往下压（不覆盖 WebView2） -->
-        <Border x:Name="QuickPanel" Grid.Row="1" Background="#1F1F2E"
-                BorderBrush="#2F2B40" BorderThickness="0,0,0,1"
-                Padding="12,8,12,10" Visibility="Collapsed">
-            <StackPanel>
-                <DockPanel LastChildFill="False" Margin="0,0,0,6">
-                    <TextBlock x:Name="QuickPanelTitle" DockPanel.Dock="Left" Text="快速命令"
-                               Foreground="#8E87A3" FontSize="11" FontWeight="SemiBold"
-                               VerticalAlignment="Center" />
-                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                        <Button x:Name="QuickAddButton" Content="＋ 添加命令"
-                                Style="{StaticResource QuickActionButton}" Click="OnQuickAdd" />
-                        <Button Content="收起" Style="{StaticResource QuickActionButton}"
-                                Margin="6,0,0,0" Click="OnCloseQuickPanel" />
-                    </StackPanel>
-                </DockPanel>
-
-                <TextBlock x:Name="QuickEmptyText" Foreground="#6E6780" FontSize="11"
-                           Margin="2,2,0,2" TextWrapping="Wrap" Visibility="Collapsed" />
-
-                <ScrollViewer MaxHeight="210" VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled">
-                    <ItemsControl x:Name="QuickItemList">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Grid Margin="0,1">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <Button Grid.Column="0" Style="{StaticResource QuickItemButton}"
-                                            Content="{Binding Text}" Tag="{Binding}"
-                                            ToolTip="{Binding Text}" Click="OnQuickItemClick" />
-                                    <Button Grid.Column="1" Style="{StaticResource QuickItemButton}"
-                                            Content="✕" Tag="{Binding}" ToolTip="移除这一条"
-                                            Padding="8,5" Margin="6,0,0,0" Click="OnQuickRemoveClick" />
-                                </Grid>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </ScrollViewer>
-            </StackPanel>
         </Border>
 
         <!--
@@ -166,6 +91,6 @@
             任何覆盖在它上面的 WPF 元素（含同一 Grid 中的 Border）都会被遮挡。
             因此连接状态与错误提示统一写入终端内容区（由 xterm.js 渲染），不使用 WPF 覆盖层。
         -->
-        <wv2:WebView2 Grid.Row="2" x:Name="TerminalView" />
+        <wv2:WebView2 Grid.Row="1" x:Name="TerminalView" />
     </Grid>
 </Window>

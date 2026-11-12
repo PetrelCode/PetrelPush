@@ -8,21 +8,23 @@
         FontFamily="Microsoft YaHei UI, Segoe UI"
         UseLayoutRounding="True">
 
-    <Border Style="{StaticResource Card}" Margin="14">
-        <StackPanel>
-            <TextBlock x:Name="TitleText" Style="{StaticResource CardTitle}" Text="输入名称" />
-            <TextBlock x:Name="HintText" Style="{StaticResource FieldLabel}" Margin="0,6,0,6"
-                       Text="名称" TextWrapping="Wrap" />
-            <TextBox x:Name="InputBox" MinHeight="32" />
-            <TextBlock x:Name="ErrorText" FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap"
-                       Foreground="{StaticResource StateErrorBrush}" Visibility="Collapsed" />
+    <!--
+      与「添加快速命令」等弹窗保持一致：窗口底色已经是页面底色，
+      内容直接铺开，不再套一层 Card，也不再重复标题栏里的标题。
+      第一行是字段说明，第二行即输入框。
+    -->
+    <StackPanel Margin="22,18,22,18">
+        <TextBlock x:Name="HintText" Style="{StaticResource FieldLabel}" Margin="0,0,0,6"
+                   Text="名称" TextWrapping="Wrap" />
+        <TextBox x:Name="InputBox" MinHeight="32" />
+        <TextBlock x:Name="ErrorText" FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap"
+                   Foreground="{StaticResource StateErrorBrush}" Visibility="Collapsed" />
 
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
-                <Button Content="取消" Style="{StaticResource SecondaryButton}"
-                        MinWidth="84" IsCancel="True" />
-                <Button Content="确定" Style="{StaticResource PrimaryButton}"
-                        MinWidth="84" Margin="8,0,0,0" IsDefault="True" Click="OnConfirm" />
-            </StackPanel>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+            <Button Content="取消" Style="{StaticResource SecondaryButton}"
+                    MinWidth="84" IsCancel="True" />
+            <Button Content="确定" Style="{StaticResource PrimaryButton}"
+                    MinWidth="84" Margin="8,0,0,0" IsDefault="True" Click="OnConfirm" />
         </StackPanel>
-    </Border>
+    </StackPanel>
 </Window>

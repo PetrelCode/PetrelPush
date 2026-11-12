@@ -3,8 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Application.Resources>
         <!--
-          品牌主题：深海夜航。
-          深紫顶栏（与紫色品牌图标同源）+ 暖灰白工作区，重点色只出现在品牌、选中与主按钮上。
+          品牌主题：白底 + 暖灰工作区，重点色只出现在品牌、选中与主按钮上。
           紫色不铺满界面，避免落入「紫渐变白底」的通用观感。
         -->
         <SolidColorBrush x:Key="BrandBrush" Color="#5B2FC4" />
@@ -13,23 +12,12 @@
         <SolidColorBrush x:Key="BrandSoftBrush" Color="#F1EBFE" />
         <SolidColorBrush x:Key="BrandBorderBrush" Color="#D9CBF8" />
 
-        <!-- 顶栏「深海」渐变的三档色：起点、终点、分隔线 -->
+        <!-- 深色区域（内置终端窗口等）用的品牌深色与反色文字 -->
         <SolidColorBrush x:Key="BrandDeepBrush" Color="#17102A" />
         <SolidColorBrush x:Key="BrandDeepEndBrush" Color="#2A1A4E" />
         <SolidColorBrush x:Key="BrandDeepLineBrush" Color="#3A2A63" />
-        <!-- 顶栏底纹：从左到右略微提亮的斜向渐变，比纯色更有纵深 -->
-        <LinearGradientBrush x:Key="HeaderSurfaceBrush" StartPoint="0,0" EndPoint="1,0.45">
-            <GradientStop Color="#17102A" Offset="0" />
-            <GradientStop Color="#2A1A4E" Offset="1" />
-        </LinearGradientBrush>
         <SolidColorBrush x:Key="OnDarkBrush" Color="#F6F3FF" />
         <SolidColorBrush x:Key="OnDarkMutedBrush" Color="#B4A4D6" />
-        <!-- 深色顶栏上的状态胶囊：半透明白底 + 亮色文字，由代码切换文字色 -->
-        <SolidColorBrush x:Key="BadgeSurfaceBrush" Color="#26FFFFFF" />
-        <SolidColorBrush x:Key="BadgeSuccessBrush" Color="#6EE7B0" />
-        <SolidColorBrush x:Key="BadgeWarningBrush" Color="#F3C169" />
-        <SolidColorBrush x:Key="BadgeErrorBrush" Color="#FF9E93" />
-        <SolidColorBrush x:Key="BadgeIdleBrush" Color="#B8A9D8" />
 
         <SolidColorBrush x:Key="PageBackgroundBrush" Color="#F4F2F8" />
         <SolidColorBrush x:Key="SurfaceBrush" Color="#FFFFFF" />
@@ -81,31 +69,36 @@
         </Style>
 
         <!-- 字号阶梯：11 元信息 · 12 次要说明 · 13 正文/卡片标题 · 15 区块标题 · 26 指标数字 -->
-        <Style x:Key="CardTitle" TargetType="TextBlock">
+        <Style x:Key="CardTitle" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
             <Setter Property="FontSize" Value="13" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
         </Style>
 
-        <Style x:Key="SectionTitle" TargetType="TextBlock">
+        <Style x:Key="SectionTitle" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
             <Setter Property="FontSize" Value="15" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
             <Setter Property="Margin" Value="0,0,0,10" />
         </Style>
 
-        <Style x:Key="CardHint" TargetType="TextBlock">
+        <!--
+          keyed 样式会顶掉隐式的 TextBlock 样式，所以这里基于它继续派生：
+          否则 MetaText / CardHint 放进水平 StackPanel 时会丢掉 VerticalAlignment=Center，
+          文字就贴着容器顶部，和旁边的下拉框、按钮对不齐。
+        -->
+        <Style x:Key="CardHint" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
             <Setter Property="FontSize" Value="12" />
             <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
             <Setter Property="TextWrapping" Value="Wrap" />
         </Style>
 
-        <Style x:Key="MetaText" TargetType="TextBlock">
+        <Style x:Key="MetaText" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
             <Setter Property="FontSize" Value="11" />
             <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
         </Style>
 
-        <Style x:Key="MetricValue" TargetType="TextBlock">
+        <Style x:Key="MetricValue" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
             <Setter Property="FontFamily" Value="{StaticResource DisplayFont}" />
             <Setter Property="FontSize" Value="28" />
             <Setter Property="FontWeight" Value="SemiBold" />
@@ -114,7 +107,7 @@
             <Setter Property="TextTrimming" Value="CharacterEllipsis" />
         </Style>
 
-        <Style x:Key="FieldLabel" TargetType="TextBlock">
+        <Style x:Key="FieldLabel" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
             <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
             <Setter Property="FontSize" Value="12" />
             <Setter Property="Margin" Value="0,0,0,5" />
@@ -702,11 +695,11 @@
         </Style>
 
         <!--
-          顶栏导航：顶栏是深色「深海」底，导航随之反色。
-          默认半透明浅紫文字，悬停提亮为白，选中用半透明白底 + 底部亮紫指示条。
+          顶栏导航：浅色底上用品牌色胶囊表达选中——
+          默认次要色文字，悬停浅紫底，选中浅紫底 + 品牌色文字（字重始终 SemiBold，切换时不抖宽度）。
         -->
         <Style x:Key="NavButton" TargetType="RadioButton">
-            <Setter Property="Foreground" Value="{StaticResource OnDarkMutedBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
             <Setter Property="FontSize" Value="13" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Cursor" Value="Hand" />
@@ -719,22 +712,17 @@
                         <Border x:Name="Bd" Background="Transparent" BorderBrush="Transparent"
                                 BorderThickness="1" CornerRadius="9" Padding="14,7"
                                 SnapsToDevicePixels="True">
-                            <Grid>
-                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                  TextElement.FontWeight="SemiBold" />
-                                <Border x:Name="Indicator" Height="2" CornerRadius="1" Margin="0,0,0,-1"
-                                        VerticalAlignment="Bottom" Background="Transparent" />
-                            </Grid>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              TextElement.FontWeight="SemiBold" />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#1FFFFFFF" />
-                                <Setter Property="Foreground" Value="{StaticResource OnDarkBrush}" />
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource BrandSoftHoverBrush}" />
+                                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter Property="Foreground" Value="{StaticResource OnDarkBrush}" />
-                                <Setter TargetName="Bd" Property="Background" Value="#26FFFFFF" />
-                                <Setter TargetName="Indicator" Property="Background" Value="#B79CFF" />
+                                <Setter Property="Foreground" Value="{StaticResource BrandBrush}" />
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource BrandSoftBrush}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>

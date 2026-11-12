@@ -126,9 +126,6 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
 
-        // 顶栏是深色渐变，标题栏也跟着切成深色
-        SourceInitialized += (_, _) => DarkTitleBar.Apply(this);
-
         _connections = connections;
         _host = connections.Current;
         _store = store;
@@ -473,23 +470,31 @@ public partial class MainWindow : Window
         private static Brush StateBrush(string key, bool soft) =>
             (Brush)Application.Current.FindResource(soft ? $"{key}SoftBrush" : $"{key}Brush");
 
-        public string Detail
+        /// <summary>整行路径的完整文本，用于行的 ToolTip（列表里三段路径都会按宽度截断）。</summary>
+        public string Detail =>
+            $"{LocalRootText}  →  {RemoteHostText}  {RemoteRootText}";
+
+        /// <summary>本地目录：行内单独一段，等宽字体显示，方便和远端路径对齐扫读。</summary>
+        public string LocalRootText => string.IsNullOrWhiteSpace(Host.Profile.LocalRoot)
+            ? "未设置本地目录"
+            : Host.Profile.LocalRoot;
+
+        /// <summary>远端目标（用户@主机:端口）：做成胶囊，和两侧的目录路径区分开。</summary>
+        public string RemoteHostText
         {
             get
             {
-                var profile = Host.Profile;
-                var local = string.IsNullOrWhiteSpace(profile.LocalRoot)
-                    ? "（未设置本地目录）"
-                    : profile.LocalRoot;
-                var remoteRoot = string.IsNullOrWhiteSpace(profile.RemoteRoot)
-                    ? "（未设置远端目录）"
-                    : profile.RemoteRoot;
-                var remote = string.IsNullOrWhiteSpace(profile.Remote.Host)
-                    ? "（未设置主机）"
-                    : $"{profile.Remote.User}@{profile.Remote.Host}:{profile.Remote.Port}";
-                return $"{local}  →  {remote}  {remoteRoot}";
+                var remote = Host.Profile.Remote;
+                return string.IsNullOrWhiteSpace(remote.Host)
+                    ? "未设置主机"
+                    : $"{remote.User}@{remote.Host}:{remote.Port}";
             }
         }
+
+        /// <summary>远端目录。</summary>
+        public string RemoteRootText => string.IsNullOrWhiteSpace(Host.Profile.RemoteRoot)
+            ? "未设置远端目录"
+            : Host.Profile.RemoteRoot;
     }
 
     private void ApplyInitialPage(string page)
@@ -858,21 +863,22 @@ public partial class MainWindow : Window
 
     private void ApplyPhaseBadge(EnginePhase phase)
     {
-        // 顶栏是深色底，状态胶囊用半透明白底 + 对应状态的亮色文字
-        var (text, foregroundKey) = phase switch
+        // 顶栏是浅色底，胶囊换成「状态浅色底 + 同色系文字」
+        var (text, foregroundKey, backgroundKey) = phase switch
         {
-            EnginePhase.Idle => ("已同步", "BadgeSuccessBrush"),
-            EnginePhase.Scanning => ("扫描中", "BadgeWarningBrush"),
-            EnginePhase.Transferring => ("传输中", "BadgeWarningBrush"),
-            EnginePhase.Paused => ("已暂停", "BadgeErrorBrush"),
-            EnginePhase.Error => ("异常", "BadgeErrorBrush"),
-            _ => ("已停止", "BadgeIdleBrush"),
+            EnginePhase.Idle => ("已同步", "StateSuccessBrush", "StateSuccessSoftBrush"),
+            EnginePhase.Scanning => ("扫描中", "StateWarningBrush", "StateWarningSoftBrush"),
+            EnginePhase.Transferring => ("传输中", "StateWarningBrush", "StateWarningSoftBrush"),
+            EnginePhase.Paused => ("已暂停", "StateErrorBrush", "StateErrorSoftBrush"),
+            EnginePhase.Error => ("异常", "StateErrorBrush", "StateErrorSoftBrush"),
+            _ => ("已停止", "StateIdleBrush", "StateIdleSoftBrush"),
         };
 
         // 右上角只显示状态文字，传输进度统一在右下角面板展示
         PhaseText.Text = text;
         PhaseText.Foreground = (Brush)FindResource(foregroundKey);
         PhaseDot.Fill = (Brush)FindResource(foregroundKey);
+        PhaseBadge.Background = (Brush)FindResource(backgroundKey);
     }
 
     /// <summary>手动下载占用右下角面板：标题为下载中，行内是文件名与进度。</summary>
@@ -932,10 +938,12 @@ public partial class MainWindow : Window
         }
 
         SettingsResultText.Text = string.Empty;
+        QuickCommandResultText.Text = string.Empty;
         SettingsProfilePathText.Text = _store.GetProfileDirectory(profile.ProfileId);
         // 多连接共用一份日志：显示实际写入目录，而不是当前连接的（可能为空）目录
         SettingsLogPathText.Text = LoggingSetup.LogDirectory;
         LoadLocalTerminalOptions(profile);
+        LoadQuickCommands(profile);
     }
 
     /// <summary>设置页「本地终端」：枚举本机可用的 shell，并回填已保存的偏好。</summary>
@@ -1011,6 +1019,128 @@ public partial class MainWindow : Window
 
         LocalTerminalHintText.Text = isNotice ? message : string.Empty;
         LocalTerminalHintText.Visibility = isNotice ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// 设置页「快速命令」：列出当前连接的条目。改动立即写 config.json，
+    /// 已经打开的终端下次点开弹窗就能读到（终端每次现取配置，不缓存副本）。
+    /// </summary>
+    private void LoadQuickCommands(SyncProfile profile)
+    {
+        var commands = profile.QuickAccess?.Commands ?? new List<QuickCommand>();
+        QuickCommandList.ItemsSource = commands.ToArray();
+        QuickCommandEmptyText.Visibility = commands.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void OnAddQuickCommand(object sender, RoutedEventArgs e)
+    {
+        var dialog = new QuickCommandEditorWindow("添加快速命令", string.Empty, string.Empty)
+        {
+            Owner = this,
+            Validate = (name, command) => ValidateQuickCommand(name, command, null),
+        };
+
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        var profile = _host.Profile;
+        (profile.QuickAccess.Commands ??= new List<QuickCommand>())
+            .Add(new QuickCommand { Name = dialog.CommandName, Command = dialog.CommandText });
+
+        SaveQuickCommands(profile, $"已添加快速命令「{dialog.CommandName}」");
+    }
+
+    private void OnEditQuickCommand(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: QuickCommand command })
+        {
+            return;
+        }
+
+        var dialog = new QuickCommandEditorWindow("编辑快速命令", command.Name, command.Command)
+        {
+            Owner = this,
+            Validate = (name, text) => ValidateQuickCommand(name, text, command),
+        };
+
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        command.Name = dialog.CommandName;
+        command.Command = dialog.CommandText;
+
+        SaveQuickCommands(_host.Profile, $"已保存快速命令「{command.Name}」");
+    }
+
+    private void OnDeleteQuickCommand(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: QuickCommand command })
+        {
+            return;
+        }
+
+        var profile = _host.Profile;
+        var commands = profile.QuickAccess.Commands;
+        if (commands is null || !commands.Remove(command))
+        {
+            return;
+        }
+
+        SaveQuickCommands(profile, $"已删除快速命令「{command.Name}」");
+    }
+
+    /// <summary>名称 / 命令校验：都非空，命令单行，名称与命令都不与其它的条目重复。</summary>
+    /// <param name="editing">编辑时排除自身，添加时为 null。</param>
+    private string? ValidateQuickCommand(string name, string command, QuickCommand? editing)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return "名称不能为空";
+        }
+
+        if (string.IsNullOrWhiteSpace(command))
+        {
+            return "命令不能为空";
+        }
+
+        if (command.IndexOfAny(['\r', '\n']) >= 0)
+        {
+            return "命令只能是单行，不能包含换行";
+        }
+
+        var others = (_host.Profile.QuickAccess?.Commands ?? new List<QuickCommand>())
+            .Where(item => !ReferenceEquals(item, editing))
+            .ToList();
+
+        if (others.Any(item => string.Equals(item.Name, name, StringComparison.OrdinalIgnoreCase)))
+        {
+            return "该名称已被其它命令占用";
+        }
+
+        return others.Any(item => string.Equals(item.Command, command, StringComparison.Ordinal))
+            ? "该命令已在列表中"
+            : null;
+    }
+
+    private void SaveQuickCommands(SyncProfile profile, string result)
+    {
+        try
+        {
+            _store.Save(profile);
+            QuickCommandResultText.Foreground = (Brush)FindResource("StateSuccessBrush");
+            QuickCommandResultText.Text = result;
+        }
+        catch (Exception ex)
+        {
+            QuickCommandResultText.Foreground = (Brush)FindResource("StateErrorBrush");
+            QuickCommandResultText.Text = $"保存快速命令失败：{ex.Message}";
+        }
+
+        LoadQuickCommands(profile);
     }
 
     private void LoadIgnoreEditor(SyncProfile profile)
@@ -1126,7 +1256,6 @@ public partial class MainWindow : Window
     private void LoadLocalEntries()
     {
         LocalFileList.ItemsSource = null;
-        LocalCountText.Text = string.Empty;
 
         var profile = _host.Profile;
         var root = profile.LocalRoot;
@@ -1186,7 +1315,6 @@ public partial class MainWindow : Window
 
         items.Sort(CompareBrowserEntries);
         LocalFileList.ItemsSource = items;
-        LocalCountText.Text = $"{items.Count} 项";
     }
 
     private IgnoreRules BuildIgnoreRules(SyncProfile profile, string root)
@@ -1224,7 +1352,6 @@ public partial class MainWindow : Window
 
         _remoteLoading = true;
         RemoteFileList.ItemsSource = null;
-        RemoteCountText.Text = string.Empty;
 
         try
         {
@@ -1247,7 +1374,6 @@ public partial class MainWindow : Window
             }
 
             RemoteFileList.ItemsSource = items;
-            RemoteCountText.Text = $"{items.Count} 项";
             _remoteLoaded = true;
 
             if (items.Count == 0)
@@ -1472,21 +1598,46 @@ public partial class MainWindow : Window
             return;
         }
 
-        var profileId = _host.Profile.ProfileId;
+        // 捕获当前连接：终端窗口打开后再切换连接，快速入口仍然读这条连接的配置
+        var host = _host;
+        var profileId = host.Profile.ProfileId;
         try
         {
             var window = TerminalWindow.ForLocal(
                 directory,
                 preference,
-                _host.Profile.QuickAccess,
+                () => host.Profile.QuickAccess,
                 quickAccess => PersistQuickAccess(profileId, quickAccess));
-            window.Owner = this;
-            window.Show();
+            ShowTerminalWindow(window);
         }
         catch (Exception ex)
         {
             ShowMessage($"打开本地终端失败：{ex.Message}", isError: true);
         }
+    }
+
+    /// <summary>
+    /// 显示终端窗口。终端刻意不设 Owner：带 Owner 的窗口在主窗口最小化时会被系统连带隐藏，
+    /// 而终端经常要在主窗口收起来之后继续用。窗口位置改为手动居中到主窗口，
+    /// 保持「从主窗口弹出」的观感，并夹在工作区内避免跑到屏幕外。
+    /// </summary>
+    private void ShowTerminalWindow(TerminalWindow window)
+    {
+        var workArea = SystemParameters.WorkArea;
+        var anchor = WindowState == WindowState.Normal
+            ? new Rect(Left, Top, ActualWidth, ActualHeight)
+            : workArea;
+
+        window.WindowStartupLocation = WindowStartupLocation.Manual;
+        window.Left = Math.Clamp(
+            anchor.Left + ((anchor.Width - window.Width) / 2),
+            workArea.Left,
+            Math.Max(workArea.Left, workArea.Right - window.Width));
+        window.Top = Math.Clamp(
+            anchor.Top + ((anchor.Height - window.Height) / 2),
+            workArea.Top,
+            Math.Max(workArea.Top, workArea.Bottom - window.Height));
+        window.Show();
     }
 
     /// <summary>
@@ -1802,9 +1953,9 @@ public partial class MainWindow : Window
             var window = TerminalWindow.ForRemote(
                 profile,
                 absolute,
+                () => profile.QuickAccess,
                 quickAccess => PersistQuickAccess(profileId, quickAccess));
-            window.Owner = this;
-            window.Show();
+            ShowTerminalWindow(window);
         }
         catch (Exception ex)
         {
